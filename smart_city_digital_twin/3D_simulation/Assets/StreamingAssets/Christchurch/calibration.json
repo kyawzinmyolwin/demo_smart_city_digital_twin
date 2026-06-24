@@ -1,0 +1,52 @@
+{
+  "description": "SUMO network grid: (sumoX,0,sumoY) -> Unity; WGS origin at SUMO (0,0)",
+  "nztmPlane": {
+    "originEasting": 1569397.977,
+    "originNorthing": 5179028.565,
+    "originLatitude": -43.541061,
+    "originLongitude": 172.621215,
+    "mapYawOffsetDegrees": 0,
+    "cornerIntersectionIds": ["I2537","I3475","I2629","I3502"],
+    "cornerSumoUnity": {
+      "I2537": [419.2, 2225.05],
+      "I3475": [2413.14, 2202.13],
+      "I2629": [544.37, 113.0],
+      "I3502": [2373.78, 81.5]
+    }
+  },
+  "wgs84ToNztm": {
+    "easting": { "lon": 80798.830224, "lat": -478.711935, "constant": -12399037.892774 },
+    "northing": { "lon": 382.344127, "lat": 111044.426969, "constant": 9948020.025427 }
+  },
+  "sumoToNztmOffset": {
+    "offsetX": { "sumoX": 1, "sumoY": 0, "constant": 0 },
+    "offsetZ": { "sumoX": 0, "sumoY": 1, "constant": 0 }
+  },
+  "wgs84ToSumo": {
+    "sumoX": { "lon": 80804.603493, "lat": 2186.78134, "constant": -13853374.294187 },
+    "sumoY": { "lon": -1590.84519, "lat": 111059.963777, "constant": 5110282.444566 },
+    "junctionPairsUsed": 345
+  },
+  "sumoToWgs84": {
+    "longitude": { "sumoX": 0.000012, "sumoY": 0, "constant": 172.621215 },
+    "latitude": { "sumoX": 0, "sumoY": 0.000009, "constant": -43.541061 }
+  },
+  "mapTransform": {
+    "positionX": 1240,
+    "positionY": 0,
+    "positionZ": 1158,
+    "rotationEulerY": 181.2,
+    "scaleX": 1,
+    "scaleY": 1,
+    "scaleZ": 1,
+    "notes": "Christchurch_Central_City_3D root. Rotate Y=180, Scale Z=1. SUMO (x,y) aligns to Unity (x,0,z). WGS (-43.541061,172.621215) at SUMO (0,0)."
+  },
+  "vehicleSpawner": {
+    "autoRecenterOnFirstVehicle": false,
+    "sumoPlaneManualOffset": { "x": 0.0, "y": 0.0 },
+    "coordinateScale": 1.0,
+    "busScale": { "x": 2.5, "y": 3.4, "z": 12.0 },
+    "busColor": { "r": 0.0, "g": 0.549, "b": 0.604, "a": 1.0 },
+    "busTypeIds": ["bus"]
+  }
+}
