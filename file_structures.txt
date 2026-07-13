@@ -1,0 +1,70 @@
+.
+├── README.md
+├── Unity_fundamental
+│   ├── Assets
+│   │   ├── CubeMover.cs
+│   │   ├── CubeMover.cs.meta
+│   │   ├── CubeSpawner.cs
+│   │   ├── CubeSpawner.cs.meta
+│   │   ├── CubeSpawnerPooled.cs
+│   │   ├── CubeSpawnerPooled.cs.meta
+│   │   ├── InputSystem_Actions.inputactions
+│   │   ├── InputSystem_Actions.inputactions.meta
+│   │   ├── PooledCubeMover.cs
+│   │   ├── PooledCubeMover.cs.meta
+│   │   ├── Readme.asset
+│   │   ├── Readme.asset.meta
+│   │   ├── Scenes
+│   │   ├── Scenes.meta
+│   │   ├── Settings
+│   │   ├── Settings.meta
+│   │   ├── TextMesh Pro
+│   │   ├── TextMesh Pro.meta
+│   │   ├── TutorialInfo
+│   │   └── TutorialInfo.meta
+│   ├── Packages
+│   │   ├── manifest.json
+│   │   └── packages-lock.json
+│   ├── ProjectSettings
+│   │   ├── AudioManager.asset
+│   │   ├── ClusterInputManager.asset
+│   │   ├── DynamicsManager.asset
+│   │   ├── EditorBuildSettings.asset
+│   │   ├── EditorSettings.asset
+│   │   ├── GraphicsSettings.asset
+│   │   ├── InputManager.asset
+│   │   ├── MemorySettings.asset
+│   │   ├── MultiplayerManager.asset
+│   │   ├── NavMeshAreas.asset
+│   │   ├── PackageManagerSettings.asset
+│   │   ├── Physics2DSettings.asset
+│   │   ├── PresetManager.asset
+│   │   ├── ProjectSettings.asset
+│   │   ├── ProjectVersion.txt
+│   │   ├── QualitySettings.asset
+│   │   ├── SceneTemplateSettings.json
+│   │   ├── ShaderGraphSettings.asset
+│   │   ├── TagManager.asset
+│   │   ├── TimeManager.asset
+│   │   ├── URPProjectSettings.asset
+│   │   ├── UnityConnectSettings.asset
+│   │   ├── VFXManager.asset
+│   │   ├── VersionControlSettings.asset
+│   │   └── XRSettings.asset
+│   └── Unity_fundamental.slnx
+├── file_structures.txt
+└── smart_city_digital_twin
+    ├── 2D_simulation
+    │   ├── Christchurch_Central_City_main_streets.sumocfg
+    │   ├── README.md
+    │   ├── data
+    │   ├── requirements.txt
+    │   └── scripts
+    ├── 3D_simulation
+    │   ├── Assets
+    │   ├── Packages
+    │   ├── ProjectSettings
+    │   └── README.md
+    └── README.md
+
+17 directories, 51 files
