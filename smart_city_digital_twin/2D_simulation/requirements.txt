@@ -4,3 +4,6 @@ xlrd>=2.0.0
 
 # match_intersection_opendata.py — NZTM (EPSG:2193) → WGS84
 pyproj>=3.6.0
+
+# run_traci.py --emit — live vehicle-state WebSocket emitter (Phase 1)
+websockets>=13.0
