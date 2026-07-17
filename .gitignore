@@ -1,0 +1,25 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# Virtual environments (see CLAUDE.md "Environment setup")
+.venv/
+venv/
+env/
+
+# --- macOS ---
+.DS_Store
+
+# --- Editors / IDEs ---
+.vscode/
+.idea/
+*.swp
+
+# --- SUMO / simulation runtime output ---
+# Generated at run time by sumo, not source. The committed network/demand files
+# under data/output/ are build products the project tracks on purpose, so this
+# stays narrow and only covers logs and dumps.
+*.log
+sumo.log
