@@ -1,0 +1,8 @@
+# Runtime dependencies for the metrics-aggregation Lambda.
+#
+# boto3 is provided by the AWS Lambda Python runtime, so it is intentionally NOT
+# pinned here — bundling it only bloats the deployment package. It is listed in
+# requirements-dev.txt for local test/lint of handlers.py.
+#
+# The InfluxDB write path (influxdb-client) lands in the next Phase 2 slice; it
+# is left out until on_tick actually persists metrics.
