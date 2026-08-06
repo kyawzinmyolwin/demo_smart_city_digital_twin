@@ -4,6 +4,83 @@ Project context for Claude Code. Read this before touching any file.
 
 ---
 
+---
+
+## Project roadmap (current status)
+
+### Phase 0 — Pre-build (complete)
+- [x] Project proposal written and submitted for examiner approval
+- [x] Architecture, hour budget, and feature set locked in
+- [x] CLAUDE.md committed to repo root
+- [x] AWS chosen as cloud platform
+- [x] Terraform chosen as IaC tool
+- [x] All AWS resources identified and diagrammed
+
+### Phase 1 — Core build (~200 hours, Weeks 1–21)
+- [ ] Wk 1–2: Environment setup (15h)
+      Confirm existing simulation runs end-to-end before touching anything
+- [ ] Wk 3–6: JSON emitter + WebSocket server (25h) ← START HERE
+      Extend run_traci.py — see "Where to start" section above
+- [ ] Wk 7–12: Cloud data pipeline (50h)
+      API Gateway, Lambda (ingest + metrics + replay), InfluxDB Cloud, Terraform IaC
+- [ ] Wk 13–18: Live dashboard (55h)
+      Extend intersection_map.html — WebSocket client, vehicle markers, Chart.js panels
+- [ ] Wk 19–21: CI/CD, docs, demo recording (40h)
+      GitHub Actions pipeline, README, architecture diagram, 2-min demo video
+
+### Phase 2 — Extension features (~97 hours, Weeks 22–28)
+- [ ] Wk 22–24: Congestion alerts (15h) + scenario comparison (30h)
+- [ ] Wk 25–26: Historical replay scrub bar (25h) + threshold metrics panel (12h)
+- [ ] Wk 27–28: Docker Compose one-command demo (15h)
+
+### Phase 3 — Portfolio wrap-up (Weeks 29–30)
+- [ ] Final README, screenshots, live demo URL
+- [ ] CV update and LinkedIn write-up
+- [ ] Start applying at week 21 — do not wait until hour 300
+
+---
+
+## AWS resources (Terraform — not yet written)
+
+### To be created
+- aws_apigatewayv2_api (WebSocket API — public endpoint)
+- aws_apigatewayv2_route ($connect, $disconnect, sendmessage, $default)
+- aws_apigatewayv2_stage (prod, auto-deploy)
+- aws_lambda_function: traffic-ingest, traffic-metrics, traffic-replay
+- aws_iam_role + aws_iam_role_policy (Lambda execution role)
+- aws_secretsmanager_secret (InfluxDB token — never hardcode)
+- aws_s3_bucket: dashboard hosting + Terraform state
+- aws_dynamodb_table: tf-state-lock (Terraform state locking)
+- aws_cloudfront_distribution (HTTPS CDN for dashboard)
+- aws_cloudwatch_log_group (one per Lambda, 14-day retention)
+- aws_cloudwatch_metric_alarm (billing alert at $5 threshold)
+- influxdb_bucket (via InfluxDB Terraform provider — external to AWS)
+
+### Terraform file structure (to create)
+infra/
+├── main.tf          ← provider config, backend (S3 + DynamoDB)
+├── variables.tf     ← region, project name, environment
+├── outputs.tf       ← API Gateway URL, CloudFront URL, S3 bucket name
+├── api_gateway.tf   ← WebSocket API, routes, stage
+├── lambda.tf        ← all three Lambda functions + IAM role
+├── storage.tf       ← InfluxDB bucket, Secrets Manager, S3 buckets
+├── cdn.tf           ← CloudFront distribution
+├── observability.tf ← CloudWatch log groups and billing alarm
+└── versions.tf      ← required_providers with pinned versions
+
+### Setup order (do this before terraform apply)
+1. Create AWS account, enable billing alerts, set up IAM user with least-privilege
+2. Create S3 state bucket manually (aws s3 mb s3://your-tf-state-bucket)
+3. Create DynamoDB lock table manually
+4. Sign up for InfluxDB Cloud free tier, create org and bucket, copy token
+5. Store InfluxDB token in Secrets Manager manually (first time only)
+6. Then terraform init && terraform plan && terraform apply
+
+### Expected monthly cost
+Secrets Manager: ~$0.40/secret/month
+Everything else: AWS free tier (12-month or always-free)
+Total: ~$1–2/month
+
 ## What this project is
 
 A Christchurch CBD traffic simulation (SUMO-based) extended with a cloud data pipeline and a live browser dashboard. The simulation already exists and works. Everything cloud-related is new — nothing has been built yet.
