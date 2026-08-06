@@ -36,6 +36,32 @@
       text-shadow: 0 0 2px #fff, 0 0 3px #fff;
       opacity: 0.95;
     }
+    .live-block {
+      margin-top: 10px;
+      border-top: 1px solid #e2e8f0;
+      padding-top: 8px;
+    }
+    #ws-status { font-weight: 600; }
+    #ws-status.live { color: #0f766e; }
+    #ws-status.down { color: #b91c1c; }
+    .legend {
+      margin-top: 6px;
+      font-size: 11px;
+      color: #334155;
+    }
+    .legend-dot {
+      display: inline-block;
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      margin-right: 4px;
+      margin-left: 10px;
+      vertical-align: middle;
+    }
+    .legend-dot:first-child { margin-left: 0; }
+    .veh-marker {
+      transition: transform 0.05s linear;
+    }
   </style>
 </head>
 <body>
@@ -53,6 +79,24 @@
       If you opened the file directly from disk, use <b>Choose CSV…</b> below.
     </div>
     <input type="file" id="file-csv" accept=".csv,text/csv" style="margin-top:8px;font-size:11px;max-width:100%;" />
+    <div class="live-block">
+      <strong>Live simulation</strong>
+      <span id="ws-status" class="down">disconnected</span> ·
+      <span id="veh-count">0</span> vehicles
+      <div>
+        <button type="button" id="btn-connect">Connect</button>
+        <button type="button" id="btn-disconnect" disabled>Disconnect</button>
+      </div>
+      <div class="legend">
+        <span class="legend-dot" style="background:#16a34a;"></span>free-flow
+        <span class="legend-dot" style="background:#f59e0b;"></span>slow
+        <span class="legend-dot" style="background:#dc2626;"></span>congested
+      </div>
+      <div class="hint" style="margin-top:6px;">
+        Connects to the WebSocket emitter (<code>run_traci.py --emit</code>) on
+        <code>ws://localhost:8765</code>. Start that first, then click Connect.
+      </div>
+    </div>
   </div>
   <div id="map"></div>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
@@ -249,6 +293,7 @@
   const edgeLayer = L.layerGroup().addTo(map);
   const arrowLayer = L.layerGroup().addTo(map);
   const markerLayer = L.layerGroup().addTo(map);
+  const vehicleLayer = L.layerGroup().addTo(map);
 
   function setStatus(msg, isErr) {
     const el = document.getElementById("status");
@@ -397,6 +442,140 @@
     reader.readAsText(f, "UTF-8");
     ev.target.value = "";
   });
+
+  // ---- Live vehicle layer (WebSocket client) ----------------------------
+  // Consumes the JSON schema emitted by run_traci.py --emit:
+  //   { tick, simId, simTime, vehicleCount, vehicles: [{id, lat, lng, speed, lane, accel}] }
+  const WS_URL = "ws://localhost:8765";
+  const SPEED_SLOW = 3;   // m/s — below this, treat as congested (red)
+  const SPEED_FREE = 8;   // m/s — at/above this, treat as free-flow (green)
+
+  let ws = null;
+  let wsReconnectTimer = null;
+  const vehicleMarkers = new Map(); // vehicle id -> L.CircleMarker
+
+  const wsStatusEl = document.getElementById("ws-status");
+  const vehCountEl = document.getElementById("veh-count");
+  const btnConnect = document.getElementById("btn-connect");
+  const btnDisconnect = document.getElementById("btn-disconnect");
+
+  function setWsStatus(text, isLive) {
+    wsStatusEl.textContent = text;
+    wsStatusEl.className = isLive ? "live" : "down";
+  }
+
+  function colorForSpeed(speed) {
+    if (speed == null || !isFinite(speed)) return "#64748b";
+    if (speed < SPEED_SLOW) return "#dc2626";
+    if (speed < SPEED_FREE) return "#f59e0b";
+    return "#16a34a";
+  }
+
+  function updateVehicles(vehicles) {
+    const seen = new Set();
+    (vehicles || []).forEach(function (v) {
+      if (!v || v.lat == null || v.lng == null) return;
+      seen.add(v.id);
+      const color = colorForSpeed(v.speed);
+      let m = vehicleMarkers.get(v.id);
+      if (!m) {
+        m = L.circleMarker([v.lat, v.lng], {
+          radius: 4,
+          className: "veh-marker",
+          color: "#1e293b",
+          weight: 1,
+          fillColor: color,
+          fillOpacity: 0.9,
+        }).addTo(vehicleLayer);
+        vehicleMarkers.set(v.id, m);
+      } else {
+        m.setLatLng([v.lat, v.lng]);
+        m.setStyle({ fillColor: color });
+      }
+      const speedTxt = isFinite(v.speed) ? v.speed.toFixed(1) + " m/s" : "—";
+      m.bindTooltip(v.id + " · " + speedTxt + " · " + (v.lane || ""), {
+        sticky: true,
+      });
+    });
+
+    // Remove markers for vehicles that have left the network.
+    vehicleMarkers.forEach(function (m, id) {
+      if (!seen.has(id)) {
+        vehicleLayer.removeLayer(m);
+        vehicleMarkers.delete(id);
+      }
+    });
+
+    vehCountEl.textContent = seen.size;
+  }
+
+  function clearVehicles() {
+    vehicleLayer.clearLayers();
+    vehicleMarkers.clear();
+    vehCountEl.textContent = "0";
+  }
+
+  function connectWs() {
+    if (ws) return;
+    setWsStatus("connecting…", false);
+    btnConnect.disabled = true;
+
+    try {
+      ws = new WebSocket(WS_URL);
+    } catch (err) {
+      setWsStatus("failed to open (" + err.message + ")", false);
+      btnConnect.disabled = false;
+      ws = null;
+      return;
+    }
+
+    ws.onopen = function () {
+      setWsStatus("connected", true);
+      btnConnect.disabled = true;
+      btnDisconnect.disabled = false;
+    };
+
+    ws.onmessage = function (evt) {
+      let data;
+      try {
+        data = JSON.parse(evt.data);
+      } catch (err) {
+        return; // ignore malformed frames
+      }
+      updateVehicles(data.vehicles);
+    };
+
+    ws.onerror = function () {
+      setWsStatus("connection error", false);
+    };
+
+    ws.onclose = function () {
+      setWsStatus("disconnected", false);
+      btnConnect.disabled = false;
+      btnDisconnect.disabled = true;
+      ws = null;
+      clearVehicles();
+    };
+  }
+
+  function disconnectWs() {
+    if (wsReconnectTimer) {
+      clearTimeout(wsReconnectTimer);
+      wsReconnectTimer = null;
+    }
+    if (ws) {
+      ws.close();
+    }
+  }
+
+  btnConnect.addEventListener("click", connectWs);
+  btnDisconnect.addEventListener("click", disconnectWs);
+
+  // Best-effort auto-connect on page load — silently falls back to
+  // "disconnected" if run_traci.py --emit isn't running yet. Click Connect
+  // manually once it is.
+  wsReconnectTimer = setTimeout(connectWs, 300);
+  // -------------------------------------------------------------------------
 
   loadFromFetch().catch(function () {
     setStatus("Could not load intersection_geo.csv (normal if using file://). Use HTTP server or Choose CSV.", true);
