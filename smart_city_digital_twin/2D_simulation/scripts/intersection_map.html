@@ -99,6 +99,7 @@
       <div>
         <button type="button" id="btn-connect">Connect</button>
         <button type="button" id="btn-disconnect" disabled>Disconnect</button>
+        <button type="button" id="btn-pause" disabled>Pause</button>
       </div>
       <div class="legend">
         <span class="legend-dot" style="background:#16a34a;"></span>free-flow
@@ -511,7 +512,12 @@
   const vehCountEl = document.getElementById("veh-count");
   const btnConnect = document.getElementById("btn-connect");
   const btnDisconnect = document.getElementById("btn-disconnect");
+  const btnPause = document.getElementById("btn-pause");
   const wsUrlEl = document.getElementById("ws-url");
+
+  // When paused, incoming WS frames are ignored so the map and charts freeze
+  // on the last snapshot. The pause also fires a control-plane call (below).
+  let paused = false;
 
   // Resolve the emitter endpoint: ?ws= URL param wins, else the local default.
   // Lets the same static page point at a deployed wss:// API Gateway without
@@ -532,6 +538,49 @@
   }
 
   if (wsUrlEl) wsUrlEl.value = resolveWsUrl();
+
+  // Optional Phase 2 control-plane base, e.g. ?api=https://host/prod.
+  function resolveApiUrl() {
+    try {
+      const q = new URLSearchParams(window.location.search).get("api");
+      if (q && q.trim()) return q.trim().replace(/\/+$/, "");
+    } catch (err) {
+      // URL parsing unavailable (file://) — no API base.
+    }
+    return null;
+  }
+  const API_BASE = resolveApiUrl();
+
+  // STUB: Phase 2 pause/resume control call. With an ?api= base set, POST the
+  // action to the control route; otherwise the pause is a local freeze only.
+  // The real API Gateway route, payload shape, and auth are wired in Phase 2.
+  function sendSimControl(action) {
+    if (!API_BASE) {
+      console.info(
+        "[sim-control] " + action + " (local only — no ?api= endpoint set)"
+      );
+      return;
+    }
+    fetch(API_BASE + "/control", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: action, simId: "christchurch-cbd-001" }),
+    }).catch(function (err) {
+      console.warn("[sim-control] " + action + " failed: " + err.message);
+    });
+  }
+
+  function setPaused(next) {
+    paused = next;
+    if (btnPause) btnPause.textContent = paused ? "Resume" : "Pause";
+    sendSimControl(paused ? "pause" : "resume");
+  }
+
+  if (btnPause) {
+    btnPause.addEventListener("click", function () {
+      setPaused(!paused);
+    });
+  }
 
   function setWsStatus(text, isLive) {
     wsStatusEl.textContent = text;
@@ -616,9 +665,11 @@
       setWsStatus("connected", true);
       btnConnect.disabled = true;
       btnDisconnect.disabled = false;
+      if (btnPause) btnPause.disabled = false;
     };
 
     ws.onmessage = function (evt) {
+      if (paused) return; // frozen — hold the last snapshot
       let data;
       try {
         data = JSON.parse(evt.data);
@@ -638,6 +689,12 @@
       btnDisconnect.disabled = true;
       btnConnect.disabled = false;
       if (wsUrlEl) wsUrlEl.disabled = false;
+      // Reset pause on any close so a reconnect resumes live (no API call here).
+      paused = false;
+      if (btnPause) {
+        btnPause.disabled = true;
+        btnPause.textContent = "Pause";
+      }
       clearVehicles();
       if (wsManualClose) {
         setWsStatus("disconnected", false);
