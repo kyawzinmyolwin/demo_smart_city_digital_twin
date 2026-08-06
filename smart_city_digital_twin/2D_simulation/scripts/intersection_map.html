@@ -62,6 +62,16 @@
     .veh-marker {
       transition: transform 0.05s linear;
     }
+    .charts-panel {
+      position: absolute; z-index: 1000; bottom: 10px; right: 10px;
+      background: #fff; padding: 10px 12px; border-radius: 4px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.25);
+      width: 300px; max-width: 44vw;
+    }
+    .charts-panel strong { display: block; font-size: 13px; margin-bottom: 6px; }
+    .chart-title { font-size: 11px; color: #334155; margin: 2px 0; }
+    .chart-box { position: relative; height: 88px; margin-bottom: 8px; }
+    .chart-box:last-child { margin-bottom: 0; }
   </style>
 </head>
 <body>
@@ -99,7 +109,17 @@
     </div>
   </div>
   <div id="map"></div>
+  <div class="charts-panel" id="charts-panel">
+    <strong>Live metrics</strong>
+    <div class="chart-title">Vehicles on network</div>
+    <div class="chart-box"><canvas id="chart-count"></canvas></div>
+    <div class="chart-title">Average speed (m/s)</div>
+    <div class="chart-box"><canvas id="chart-speed"></canvas></div>
+    <div class="chart-title">Density (veh / network km)</div>
+    <div class="chart-box"><canvas id="chart-density"></canvas></div>
+  </div>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
   <script>
 (function () {
   const NEIGHBOUR_KEYS = [
@@ -218,6 +238,19 @@
     };
   }
 
+  /** Great-circle distance in km between two {lat,lng} points. */
+  function haversineKm(a, b) {
+    const R = 6371;
+    const dLat = ((b.lat - a.lat) * Math.PI) / 180;
+    const dLng = ((b.lng - a.lng) * Math.PI) / 180;
+    const s =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos((a.lat * Math.PI) / 180) *
+        Math.cos((b.lat * Math.PI) / 180) *
+        Math.sin(dLng / 2) * Math.sin(dLng / 2);
+    return 2 * R * Math.asin(Math.sqrt(s));
+  }
+
   function arrowRotationForBearing(bearingDegVal) {
     return bearingDegVal - 90;
   }
@@ -295,6 +328,9 @@
   const markerLayer = L.layerGroup().addTo(map);
   const vehicleLayer = L.layerGroup().addTo(map);
 
+  // Total network length (km), summed from CSV links; drives the density chart.
+  let networkKm = 0;
+
   function setStatus(msg, isErr) {
     const el = document.getElementById("status");
     el.textContent = msg;
@@ -310,6 +346,14 @@
     points.forEach(function (p) {
       byId[p.id] = p;
     });
+
+    let km = 0;
+    segments.forEach(function (seg) {
+      const pa = byId[seg.A];
+      const pb = byId[seg.B];
+      if (pa && pb) km += haversineKm(pa, pb);
+    });
+    networkKm = km;
 
     segments.forEach(function (seg) {
       const pa = byId[seg.A];
@@ -452,6 +496,9 @@
 
   let ws = null;
   let wsReconnectTimer = null;
+  let wsManualClose = false;   // true only after an explicit Disconnect click
+  let wsBackoffMs = 1000;      // auto-reconnect delay; doubles on each failure
+  const WS_BACKOFF_MAX = 16000;
   const vehicleMarkers = new Map(); // vehicle id -> L.CircleMarker
 
   const wsStatusEl = document.getElementById("ws-status");
@@ -478,6 +525,8 @@
       seen.add(v.id);
       const color = colorForSpeed(v.speed);
       let m = vehicleMarkers.get(v.id);
+      const speedTxt = isFinite(v.speed) ? v.speed.toFixed(1) + " m/s" : "—";
+      const tip = v.id + " · " + speedTxt + " · " + (v.lane || "");
       if (!m) {
         m = L.circleMarker([v.lat, v.lng], {
           radius: 4,
@@ -487,15 +536,13 @@
           fillColor: color,
           fillOpacity: 0.9,
         }).addTo(vehicleLayer);
+        m.bindTooltip(tip, { sticky: true });
         vehicleMarkers.set(v.id, m);
       } else {
         m.setLatLng([v.lat, v.lng]);
         m.setStyle({ fillColor: color });
+        m.setTooltipContent(tip);
       }
-      const speedTxt = isFinite(v.speed) ? v.speed.toFixed(1) + " m/s" : "—";
-      m.bindTooltip(v.id + " · " + speedTxt + " · " + (v.lane || ""), {
-        sticky: true,
-      });
     });
 
     // Remove markers for vehicles that have left the network.
@@ -517,6 +564,11 @@
 
   function connectWs() {
     if (ws) return;
+    wsManualClose = false;
+    if (wsReconnectTimer) {
+      clearTimeout(wsReconnectTimer);
+      wsReconnectTimer = null;
+    }
     setWsStatus("connecting…", false);
     btnConnect.disabled = true;
 
@@ -530,6 +582,7 @@
     }
 
     ws.onopen = function () {
+      wsBackoffMs = 1000;
       setWsStatus("connected", true);
       btnConnect.disabled = true;
       btnDisconnect.disabled = false;
@@ -543,6 +596,7 @@
         return; // ignore malformed frames
       }
       updateVehicles(data.vehicles);
+      pushMetrics(data);
     };
 
     ws.onerror = function () {
@@ -550,21 +604,40 @@
     };
 
     ws.onclose = function () {
-      setWsStatus("disconnected", false);
-      btnConnect.disabled = false;
-      btnDisconnect.disabled = true;
       ws = null;
+      btnDisconnect.disabled = true;
+      btnConnect.disabled = false;
       clearVehicles();
+      if (wsManualClose) {
+        setWsStatus("disconnected", false);
+        return;
+      }
+      // Unexpected drop (or emitter not up yet): retry with growing backoff.
+      const secs = Math.round(wsBackoffMs / 1000);
+      setWsStatus("reconnecting in " + secs + "s…", false);
+      if (wsReconnectTimer) clearTimeout(wsReconnectTimer);
+      wsReconnectTimer = setTimeout(function () {
+        wsReconnectTimer = null;
+        connectWs();
+      }, wsBackoffMs);
+      wsBackoffMs = Math.min(wsBackoffMs * 2, WS_BACKOFF_MAX);
     };
   }
 
   function disconnectWs() {
+    wsManualClose = true;
+    wsBackoffMs = 1000;
     if (wsReconnectTimer) {
       clearTimeout(wsReconnectTimer);
       wsReconnectTimer = null;
     }
     if (ws) {
       ws.close();
+    } else {
+      // Cancelled during a backoff wait — no socket to close, reset UI here.
+      setWsStatus("disconnected", false);
+      btnConnect.disabled = false;
+      btnDisconnect.disabled = true;
     }
   }
 
@@ -575,6 +648,99 @@
   // "disconnected" if run_traci.py --emit isn't running yet. Click Connect
   // manually once it is.
   wsReconnectTimer = setTimeout(connectWs, 300);
+  // -------------------------------------------------------------------------
+
+  // ---- Live metric charts (Chart.js) ------------------------------------
+  // Three time-series driven off the same WS frames as the vehicle layer:
+  //   vehicle count · average speed (m/s) · density (veh / network km).
+  const MAX_POINTS = 120; // ~2 min of history at 1 s emit ticks
+
+  function fmtClock(sec) {
+    if (sec == null || !isFinite(sec)) return "";
+    const s = ((sec % 86400) + 86400) % 86400;
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const ss = Math.floor(s % 60);
+    const p = function (n) { return n < 10 ? "0" + n : "" + n; };
+    return p(h) + ":" + p(m) + ":" + p(ss);
+  }
+
+  function makeChart(canvasId, color) {
+    const el = document.getElementById(canvasId);
+    if (!el) return null;
+    return new Chart(el.getContext("2d"), {
+      type: "line",
+      data: {
+        labels: [],
+        datasets: [{
+          data: [],
+          borderColor: color,
+          backgroundColor: color,
+          borderWidth: 1.5,
+          pointRadius: 0,
+          tension: 0.25,
+          fill: false,
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { ticks: { maxTicksLimit: 4, font: { size: 9 } } },
+          y: { beginAtZero: true, ticks: { maxTicksLimit: 4, font: { size: 9 } } },
+        },
+      },
+    });
+  }
+
+  let chartCount = null;
+  let chartSpeed = null;
+  let chartDensity = null;
+
+  if (typeof Chart !== "undefined") {
+    chartCount = makeChart("chart-count", "#2563eb");
+    chartSpeed = makeChart("chart-speed", "#f59e0b");
+    chartDensity = makeChart("chart-density", "#7c3aed");
+  }
+
+  function pushPoint(chart, label, value) {
+    if (!chart) return;
+    chart.data.labels.push(label);
+    chart.data.datasets[0].data.push(value);
+    if (chart.data.labels.length > MAX_POINTS) {
+      chart.data.labels.shift();
+      chart.data.datasets[0].data.shift();
+    }
+    chart.update("none");
+  }
+
+  function pushMetrics(data) {
+    if (!data) return;
+    const vehicles = data.vehicles || [];
+    const count = typeof data.vehicleCount === "number"
+      ? data.vehicleCount
+      : vehicles.length;
+
+    let sum = 0;
+    let n = 0;
+    vehicles.forEach(function (v) {
+      if (v && isFinite(v.speed)) {
+        sum += v.speed;
+        n += 1;
+      }
+    });
+    const avgSpeed = n ? sum / n : 0;
+    const density = networkKm > 0 ? count / networkKm : null;
+    const label = fmtClock(data.simTime);
+
+    pushPoint(chartCount, label, count);
+    pushPoint(chartSpeed, label, Number(avgSpeed.toFixed(2)));
+    if (density != null) {
+      pushPoint(chartDensity, label, Number(density.toFixed(2)));
+    }
+  }
   // -------------------------------------------------------------------------
 
   loadFromFetch().catch(function () {
