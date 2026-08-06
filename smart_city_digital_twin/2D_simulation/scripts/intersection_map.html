@@ -496,6 +496,9 @@
 
   let ws = null;
   let wsReconnectTimer = null;
+  let wsManualClose = false;   // true only after an explicit Disconnect click
+  let wsBackoffMs = 1000;      // auto-reconnect delay; doubles on each failure
+  const WS_BACKOFF_MAX = 16000;
   const vehicleMarkers = new Map(); // vehicle id -> L.CircleMarker
 
   const wsStatusEl = document.getElementById("ws-status");
@@ -522,6 +525,8 @@
       seen.add(v.id);
       const color = colorForSpeed(v.speed);
       let m = vehicleMarkers.get(v.id);
+      const speedTxt = isFinite(v.speed) ? v.speed.toFixed(1) + " m/s" : "—";
+      const tip = v.id + " · " + speedTxt + " · " + (v.lane || "");
       if (!m) {
         m = L.circleMarker([v.lat, v.lng], {
           radius: 4,
@@ -531,15 +536,13 @@
           fillColor: color,
           fillOpacity: 0.9,
         }).addTo(vehicleLayer);
+        m.bindTooltip(tip, { sticky: true });
         vehicleMarkers.set(v.id, m);
       } else {
         m.setLatLng([v.lat, v.lng]);
         m.setStyle({ fillColor: color });
+        m.setTooltipContent(tip);
       }
-      const speedTxt = isFinite(v.speed) ? v.speed.toFixed(1) + " m/s" : "—";
-      m.bindTooltip(v.id + " · " + speedTxt + " · " + (v.lane || ""), {
-        sticky: true,
-      });
     });
 
     // Remove markers for vehicles that have left the network.
@@ -561,6 +564,11 @@
 
   function connectWs() {
     if (ws) return;
+    wsManualClose = false;
+    if (wsReconnectTimer) {
+      clearTimeout(wsReconnectTimer);
+      wsReconnectTimer = null;
+    }
     setWsStatus("connecting…", false);
     btnConnect.disabled = true;
 
@@ -574,6 +582,7 @@
     }
 
     ws.onopen = function () {
+      wsBackoffMs = 1000;
       setWsStatus("connected", true);
       btnConnect.disabled = true;
       btnDisconnect.disabled = false;
@@ -595,21 +604,40 @@
     };
 
     ws.onclose = function () {
-      setWsStatus("disconnected", false);
-      btnConnect.disabled = false;
-      btnDisconnect.disabled = true;
       ws = null;
+      btnDisconnect.disabled = true;
+      btnConnect.disabled = false;
       clearVehicles();
+      if (wsManualClose) {
+        setWsStatus("disconnected", false);
+        return;
+      }
+      // Unexpected drop (or emitter not up yet): retry with growing backoff.
+      const secs = Math.round(wsBackoffMs / 1000);
+      setWsStatus("reconnecting in " + secs + "s…", false);
+      if (wsReconnectTimer) clearTimeout(wsReconnectTimer);
+      wsReconnectTimer = setTimeout(function () {
+        wsReconnectTimer = null;
+        connectWs();
+      }, wsBackoffMs);
+      wsBackoffMs = Math.min(wsBackoffMs * 2, WS_BACKOFF_MAX);
     };
   }
 
   function disconnectWs() {
+    wsManualClose = true;
+    wsBackoffMs = 1000;
     if (wsReconnectTimer) {
       clearTimeout(wsReconnectTimer);
       wsReconnectTimer = null;
     }
     if (ws) {
       ws.close();
+    } else {
+      // Cancelled during a backoff wait — no socket to close, reset UI here.
+      setWsStatus("disconnected", false);
+      btnConnect.disabled = false;
+      btnDisconnect.disabled = true;
     }
   }
 
