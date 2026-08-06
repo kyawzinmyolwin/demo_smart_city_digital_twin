@@ -93,6 +93,9 @@
       <strong>Live simulation</strong>
       <span id="ws-status" class="down">disconnected</span> ·
       <span id="veh-count">0</span> vehicles
+      <input type="text" id="ws-url" spellcheck="false"
+        style="margin-top:8px;width:100%;box-sizing:border-box;font-size:11px;font-family:ui-monospace,monospace;"
+        placeholder="ws://localhost:8765" />
       <div>
         <button type="button" id="btn-connect">Connect</button>
         <button type="button" id="btn-disconnect" disabled>Disconnect</button>
@@ -103,8 +106,11 @@
         <span class="legend-dot" style="background:#dc2626;"></span>congested
       </div>
       <div class="hint" style="margin-top:6px;">
-        Connects to the WebSocket emitter (<code>run_traci.py --emit</code>) on
-        <code>ws://localhost:8765</code>. Start that first, then click Connect.
+        Connects to the WebSocket emitter (<code>run_traci.py --emit</code>).
+        Defaults to <code>ws://localhost:8765</code>; override via the field
+        above or a <code>?ws=</code> URL parameter (e.g. a deployed
+        <code>wss://</code> API Gateway endpoint). Start the emitter first,
+        then click Connect.
       </div>
     </div>
   </div>
@@ -490,7 +496,7 @@
   // ---- Live vehicle layer (WebSocket client) ----------------------------
   // Consumes the JSON schema emitted by run_traci.py --emit:
   //   { tick, simId, simTime, vehicleCount, vehicles: [{id, lat, lng, speed, lane, accel}] }
-  const WS_URL = "ws://localhost:8765";
+  const WS_DEFAULT = "ws://localhost:8765";
   const SPEED_SLOW = 3;   // m/s — below this, treat as congested (red)
   const SPEED_FREE = 8;   // m/s — at/above this, treat as free-flow (green)
 
@@ -505,6 +511,27 @@
   const vehCountEl = document.getElementById("veh-count");
   const btnConnect = document.getElementById("btn-connect");
   const btnDisconnect = document.getElementById("btn-disconnect");
+  const wsUrlEl = document.getElementById("ws-url");
+
+  // Resolve the emitter endpoint: ?ws= URL param wins, else the local default.
+  // Lets the same static page point at a deployed wss:// API Gateway without
+  // an edit — just append ?ws=wss://host/path (or type it in the field).
+  function resolveWsUrl() {
+    try {
+      const q = new URLSearchParams(window.location.search).get("ws");
+      if (q && q.trim()) return q.trim();
+    } catch (err) {
+      // URL parsing unavailable (e.g. file://) — fall through to default.
+    }
+    return WS_DEFAULT;
+  }
+
+  function currentWsUrl() {
+    const typed = wsUrlEl && wsUrlEl.value ? wsUrlEl.value.trim() : "";
+    return typed || WS_DEFAULT;
+  }
+
+  if (wsUrlEl) wsUrlEl.value = resolveWsUrl();
 
   function setWsStatus(text, isLive) {
     wsStatusEl.textContent = text;
@@ -572,11 +599,14 @@
     setWsStatus("connecting…", false);
     btnConnect.disabled = true;
 
+    const url = currentWsUrl();
+    if (wsUrlEl) wsUrlEl.disabled = true;
     try {
-      ws = new WebSocket(WS_URL);
+      ws = new WebSocket(url);
     } catch (err) {
       setWsStatus("failed to open (" + err.message + ")", false);
       btnConnect.disabled = false;
+      if (wsUrlEl) wsUrlEl.disabled = false;
       ws = null;
       return;
     }
@@ -607,6 +637,7 @@
       ws = null;
       btnDisconnect.disabled = true;
       btnConnect.disabled = false;
+      if (wsUrlEl) wsUrlEl.disabled = false;
       clearVehicles();
       if (wsManualClose) {
         setWsStatus("disconnected", false);
