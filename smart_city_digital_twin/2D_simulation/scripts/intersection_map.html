@@ -81,8 +81,11 @@
     <div><button type="button" id="btn-reload">Reload CSV</button></div>
     <div id="status"></div>
     <div class="hint">
-      Live reload: serve this folder over HTTP, then open the page in the browser (not file://).
-      Example: <code>python3 -m http.server 8765</code> → <code>http://localhost:8765/intersection_map.html</code>
+      Serve over HTTP from the <code>2D_simulation/</code> folder (not <code>scripts/</code>,
+      and not file://) so the map can fetch <code>../data/output/intersection_geo.csv</code>.
+      Example: <code>cd 2D_simulation &amp;&amp; python3 -m http.server 8000</code> →
+      <code>http://localhost:8000/scripts/intersection_map.html</code>
+      (avoid port 8765 — that's the WebSocket emitter).
       After editing <code>intersection_geo.csv</code>, click <b>Reload CSV</b> or refresh the page.
     </div>
     <div class="hint" style="margin-top:6px;">
