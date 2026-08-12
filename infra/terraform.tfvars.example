@@ -1,0 +1,18 @@
+# Copy to terraform.tfvars and fill in YOUR values. terraform.tfvars is gitignored.
+
+# Must be globally unique across all of S3.
+dashboard_bucket_name = "christchurch-digital-twin-dashboard-CHANGEME"
+
+# Email subscribed to the billing alarm. You must click the confirmation link
+# AWS emails you after the first apply, or the alarm can't notify you.
+alarm_email = "you@example.com"
+
+# --- InfluxDB Cloud (fill once your account + bucket exist) --------------------
+influxdb_url = "https://REGION.aws.cloud2.influxdata.com"
+influxdb_org = "your-influx-org"
+# influxdb_bucket_name defaults to "traffic-metrics"
+
+# Optional overrides (defaults shown):
+# aws_region                  = "ap-southeast-2"
+# environment                 = "prod"
+# billing_alarm_threshold_usd = 5
