@@ -9,6 +9,11 @@ __pycache__/
 venv/
 env/
 
+# --- Secrets / local config ---
+# docker-compose reads .env for the local InfluxDB password + token.
+.env
+!.env.example
+
 # --- macOS ---
 .DS_Store
 
