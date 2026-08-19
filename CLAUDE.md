@@ -24,9 +24,10 @@ Project context for Claude Code. Read this before touching any file.
       real SUMO. Branch phase1-websocket-emitter (2 commits, pushed; PR not yet opened).
 - [ ] Wk 7–12: Cloud data pipeline (50h) ← NEXT
       API Gateway, Lambda (ingest + metrics + replay), InfluxDB Cloud, Terraform IaC
-- [~] Wk 13–18: Live dashboard (55h) — PARTIALLY DONE (built early, out of order)
-      intersection_map.html already has the WebSocket client + speed-coloured vehicle
-      markers, verified live. Still TODO: 3 Chart.js panels + pause/resume button.
+- [~] Wk 13–18: Live dashboard (55h) — CORE DONE (built early, out of order)
+      intersection_map.html has the WebSocket client, speed-coloured vehicle markers,
+      3 live Chart.js panels (count / avg speed / congestion) and a pause/resume
+      button — all verified live. Remaining: deploy the static page (S3 + CloudFront).
 - [ ] Wk 19–21: CI/CD, docs, demo recording (40h)
       GitHub Actions pipeline, README, architecture diagram, 2-min demo video
 
@@ -54,7 +55,8 @@ Project context for Claude Code. Read this before touching any file.
 
 **Next**
 - Recommended: **Phase 2 cloud pipeline** (API Gateway → Lambda → InfluxDB, Terraform) — see below.
-- Remaining live-dashboard work: 3 Chart.js panels (count / avg speed / density) + pause-resume.
+- Live-dashboard core is complete (3 Chart.js panels + pause/resume, verified live);
+  remaining dashboard work is deploying the static page (S3 + CloudFront).
 - Housekeeping: open the Phase 1 PR (`brew install gh`, or the GitHub branch compare URL).
 
 **Runtime gotchas (learned the hard way)**

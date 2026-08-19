@@ -30,3 +30,20 @@ provider "aws" {
     }
   }
 }
+
+# AWS publishes billing metrics (AWS/Billing EstimatedCharges) only in us-east-1,
+# so the billing alarm + its SNS topic must live there — this aliased provider is
+# used only by those resources in observability.tf.
+provider "aws" {
+  alias  = "us_east_1"
+  region = "us-east-1"
+
+  default_tags {
+    tags = {
+      Project     = var.project
+      Environment = var.environment
+      ManagedBy   = "terraform"
+      Repo        = "demo_smart_city_digital_twin"
+    }
+  }
+}

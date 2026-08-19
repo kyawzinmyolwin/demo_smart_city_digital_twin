@@ -1,0 +1,44 @@
+# Local dev stack for the digital twin.
+#
+# For now this stands up InfluxDB 2.x only, so the metrics pipeline can be built
+# and tested locally before any AWS spend. Later (roadmap: Docker Compose
+# one-command demo) the SUMO emitter and an API service can be added as more
+# services here.
+#
+#   cp .env.example .env      # then edit the password + token
+#   docker compose up -d
+#   open http://localhost:8086   # InfluxDB UI (log in with the .env admin creds)
+#
+# Data persists in named volumes across restarts. `docker compose down` keeps the
+# data; `docker compose down -v` deletes it (fresh setup on next up).
+
+services:
+  influxdb:
+    image: influxdb:2.7
+    container_name: cdt-influxdb
+    ports:
+      - "8086:8086"
+    environment:
+      # "setup" mode auto-creates the org, bucket, admin user and token on first
+      # run so there is no manual onboarding click-through.
+      DOCKER_INFLUXDB_INIT_MODE: setup
+      DOCKER_INFLUXDB_INIT_USERNAME: ${INFLUXDB_USERNAME:-admin}
+      DOCKER_INFLUXDB_INIT_PASSWORD: ${INFLUXDB_PASSWORD:?set INFLUXDB_PASSWORD in .env (min 8 chars)}
+      DOCKER_INFLUXDB_INIT_ORG: ${INFLUXDB_ORG:-christchurch}
+      DOCKER_INFLUXDB_INIT_BUCKET: ${INFLUXDB_BUCKET:-traffic-metrics}
+      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: ${INFLUXDB_TOKEN:?set INFLUXDB_TOKEN in .env}
+      DOCKER_INFLUXDB_INIT_RETENTION: ${INFLUXDB_RETENTION:-30d}
+    volumes:
+      - influxdb-data:/var/lib/influxdb2
+      - influxdb-config:/etc/influxdb2
+    healthcheck:
+      # `docker compose ps` shows healthy once InfluxDB answers pings.
+      test: ["CMD", "influx", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  influxdb-data:
+  influxdb-config:

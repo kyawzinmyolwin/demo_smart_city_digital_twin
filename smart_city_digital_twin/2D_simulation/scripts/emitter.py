@@ -102,7 +102,10 @@ class Broadcaster:
         if not self._clients:
             return
         dead: list[Any] = []
-        for ws in self._clients:
+        # Iterate a snapshot: ``await ws.send`` yields to the event loop, during
+        # which a client can connect/disconnect and mutate self._clients. Iterating
+        # the live set would raise "Set changed size during iteration".
+        for ws in list(self._clients):
             try:
                 await ws.send(message)
             except Exception:

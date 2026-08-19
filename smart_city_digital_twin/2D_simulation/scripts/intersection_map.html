@@ -641,6 +641,78 @@
     vehCountEl.textContent = "0";
   }
 
+  // ---- Live metric charts (Chart.js) ------------------------------------
+  // Metrics are computed in the browser from the same vehicle feed the map
+  // uses — mirroring scripts/metrics.py compute_tick_metrics() — so the charts
+  // are live even without InfluxDB. (InfluxDB is for historical replay later.)
+  const MAX_POINTS = 120;            // rolling window
+  const chartsEnabled = typeof Chart !== "undefined";
+  let paused = false;
+
+  function fmtClock(simTime) {
+    if (simTime == null || !isFinite(simTime)) return "";
+    const s = Math.floor(simTime) % 86400;
+    const pad = function (n) { return String(n).padStart(2, "0"); };
+    return pad(Math.floor(s / 3600)) + ":" + pad(Math.floor((s % 3600) / 60)) + ":" + pad(s % 60);
+  }
+
+  function computeMetrics(vehicles) {
+    const list = vehicles || [];
+    const speeds = list
+      .filter(function (v) { return v && typeof v.speed === "number" && isFinite(v.speed); })
+      .map(function (v) { return v.speed; });
+    const n = speeds.length;
+    const avg = n ? speeds.reduce(function (a, b) { return a + b; }, 0) / n : 0;
+    const slow = speeds.filter(function (s) { return s < SPEED_SLOW; }).length;
+    return { count: list.length, avgSpeed: avg, congestion: n ? slow / n : 0 };
+  }
+
+  function makeChart(canvasId, label, color, yMax) {
+    return new Chart(document.getElementById(canvasId).getContext("2d"), {
+      type: "line",
+      data: { labels: [], datasets: [{
+        data: [], borderColor: color, backgroundColor: color,
+        borderWidth: 1.5, pointRadius: 0, tension: 0.25, fill: false,
+      }] },
+      options: {
+        animation: false, responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          title: { display: true, text: label, font: { size: 11 } },
+        },
+        scales: {
+          x: { ticks: { maxTicksLimit: 4, font: { size: 9 } } },
+          y: { beginAtZero: true, suggestedMax: yMax, ticks: { font: { size: 9 } } },
+        },
+      },
+    });
+  }
+
+  let charts = [];
+  if (chartsEnabled) {
+    charts = [
+      { chart: makeChart("chart-count", "Vehicles on network", "#2563eb", undefined), key: "count" },
+      { chart: makeChart("chart-speed", "Avg speed (m/s)", "#16a34a", 15), key: "avgSpeed" },
+      { chart: makeChart("chart-cong", "Congestion index (0–1)", "#dc2626", 1), key: "congestion" },
+    ];
+  }
+
+  function pushMetrics(data) {
+    if (!chartsEnabled) return;
+    const m = computeMetrics(data.vehicles);
+    const label = fmtClock(data.simTime);
+    charts.forEach(function (c) {
+      c.chart.data.labels.push(label);
+      c.chart.data.datasets[0].data.push(m[c.key]);
+      if (c.chart.data.labels.length > MAX_POINTS) {
+        c.chart.data.labels.shift();
+        c.chart.data.datasets[0].data.shift();
+      }
+      c.chart.update("none");
+    });
+  }
+  // -------------------------------------------------------------------------
+
   function connectWs() {
     if (ws) return;
     wsManualClose = false;
@@ -734,6 +806,11 @@
 
   btnConnect.addEventListener("click", connectWs);
   btnDisconnect.addEventListener("click", disconnectWs);
+  btnPause.addEventListener("click", function () {
+    paused = !paused;
+    btnPause.textContent = paused ? "Resume" : "Pause";
+    setWsStatus(paused ? "paused (view frozen)" : "connected", !paused);
+  });
 
   // Best-effort auto-connect on page load — silently falls back to
   // "disconnected" if run_traci.py --emit isn't running yet. Click Connect
