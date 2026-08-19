@@ -1,6 +1,7 @@
 # Terraform working files — never commit state (may contain secrets) or
 # account-specific config.
 .terraform/
+build/
 *.tfstate
 *.tfstate.*
 crash.log

@@ -20,3 +20,18 @@ output "influxdb_token_secret_arn" {
   description = "ARN of the InfluxDB token secret (granted to the metrics Lambda)."
   value       = aws_secretsmanager_secret.influxdb_token.arn
 }
+
+output "websocket_url" {
+  description = "Public WebSocket endpoint — the emitter sends here, browsers connect here."
+  value       = aws_apigatewayv2_stage.prod.invoke_url
+}
+
+output "replay_url" {
+  description = "HTTPS endpoint for historical metric reads (the dashboard's replay/history calls)."
+  value       = aws_lambda_function_url.replay.function_url
+}
+
+output "dashboard_url" {
+  description = "CloudFront URL serving the dashboard over HTTPS."
+  value       = "https://${aws_cloudfront_distribution.dashboard.domain_name}"
+}

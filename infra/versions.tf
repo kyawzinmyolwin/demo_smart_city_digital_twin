@@ -24,5 +24,11 @@ terraform {
       source  = "hashicorp/random"
       version = "~> 3.6"
     }
+
+    # Zips the Lambda source directories at plan time.
+    archive = {
+      source  = "hashicorp/archive"
+      version = "~> 2.4"
+    }
   }
 }

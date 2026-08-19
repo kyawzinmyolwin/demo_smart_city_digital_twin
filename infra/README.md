@@ -25,10 +25,10 @@ front end for the dashboard.
 |---|---|
 | `versions.tf`, `main.tf`, `variables.tf`, `outputs.tf` | ✅ foundation |
 | `storage.tf` (S3 dashboard bucket, Secrets Manager) | ✅ done |
-| `api_gateway.tf` (WebSocket API + routes + stage) | ⏳ next |
-| `lambda.tf` + `functions/` (ingest / metrics / replay + IAM) | ⏳ next |
-| `cdn.tf` (CloudFront + OAC bucket policy) | ⏳ next |
-| `observability.tf` (log groups + billing alarm) | ⏳ next |
+| `api_gateway.tf` (WebSocket API + routes + stage) | ✅ done |
+| `lambda.tf` + `functions/` (ingest / metrics / replay + IAM + connections table) | ✅ done |
+| `cdn.tf` (CloudFront + OAC bucket policy) | ✅ done |
+| `observability.tf` (log groups + billing alarm) | ✅ done |
 | InfluxDB bucket as a TF resource | ⏳ (created in UI for now) |
 
 **Nothing here has been `terraform validate`d yet** — Terraform isn't installed on
@@ -116,6 +116,63 @@ aws secretsmanager put-secret-value \
 ```
 
 Then confirm the billing-alarm SNS subscription from the email AWS sends you.
+
+### 8. Make it live (after the infra exists)
+
+`terraform apply` builds the plumbing; these steps put data and a page through it.
+Grab the URLs first:
+
+```bash
+terraform output      # websocket_url, replay_url, dashboard_url, ...
+```
+
+**a. Upload the dashboard to S3** (CloudFront serves it):
+```bash
+aws s3 cp \
+  ../smart_city_digital_twin/2D_simulation/scripts/intersection_map.html \
+  "s3://$(terraform output -raw dashboard_bucket_name)/intersection_map.html"
+# then browse dashboard_url (HTTPS via CloudFront)
+```
+
+**b. Point the emitter at the cloud** — see the caveat below; this needs a small
+emitter change that is not built yet.
+
+**c. Smoke-test the read path** once metrics exist:
+```bash
+curl "$(terraform output -raw replay_url)?start=-1h&field=avgSpeed"
+# → {"field":"avgSpeed","points":[{"time":"...","value":6.6}, ...]}
+```
+
+## ⚠️ Connecting the local emitter to the cloud (not built yet)
+
+The current emitter (`run_traci.py --emit`) **hosts** a WebSocket server — browsers
+connect *to it*. The cloud flips that: the emitter must become a **client** that
+connects to `websocket_url` and sends each snapshot wrapped for the `sendmessage`
+route:
+
+```json
+{ "action": "sendmessage", "data": { ...the emitter snapshot... } }
+```
+
+That's a small additive feature (an `--emit-target wss://…` mode that dials out and
+posts, instead of listening). It is **out of scope for this Terraform** — the infra
+is ready and waiting; wiring the producer to it is the next code task. Until then you
+can exercise the pipeline by sending test messages to `websocket_url` with a
+WebSocket client (e.g. `wscat`).
+
+## Architecture recap
+
+```
+emitter ─push─►┐
+                API Gateway (WebSocket)  ── traffic-ingest ─┬─ fan-out to browsers
+browsers ─────►┘   $connect/$disconnect/sendmessage/$default │
+                                                             └─ async ─► traffic-metrics ─► InfluxDB Cloud
+dashboard (S3 + CloudFront)  ── replay reads ─► traffic-replay (Function URL) ─► InfluxDB Cloud
+```
+
+Note the metrics Lambda stores **aggregated metrics, not vehicle positions** (same
+cardinality decision as local) — so `traffic-replay` can drive the charts, not the
+map markers.
 
 ## Tear down
 
