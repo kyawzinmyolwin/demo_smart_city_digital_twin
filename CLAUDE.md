@@ -17,14 +17,17 @@ Project context for Claude Code. Read this before touching any file.
 - [x] All AWS resources identified and diagrammed
 
 ### Phase 1 — Core build (~200 hours, Weeks 1–21)
-- [ ] Wk 1–2: Environment setup (15h)
-      Confirm existing simulation runs end-to-end before touching anything
-- [ ] Wk 3–6: JSON emitter + WebSocket server (25h) ← START HERE
-      Extend run_traci.py — see "Where to start" section above
-- [ ] Wk 7–12: Cloud data pipeline (50h)
+- [x] Wk 1–2: Environment setup (15h)
+      SUMO built from source on macOS (~/sumo/sumo-1.27.1); existing sim confirmed running.
+- [x] Wk 3–6: JSON emitter + WebSocket server (25h)
+      DONE. scripts/emitter.py + run_traci.py --emit. Unit-tested and verified live against
+      real SUMO. Branch phase1-websocket-emitter (2 commits, pushed; PR not yet opened).
+- [ ] Wk 7–12: Cloud data pipeline (50h) ← NEXT
       API Gateway, Lambda (ingest + metrics + replay), InfluxDB Cloud, Terraform IaC
-- [ ] Wk 13–18: Live dashboard (55h)
-      Extend intersection_map.html — WebSocket client, vehicle markers, Chart.js panels
+- [~] Wk 13–18: Live dashboard (55h) — CORE DONE (built early, out of order)
+      intersection_map.html has the WebSocket client, speed-coloured vehicle markers,
+      3 live Chart.js panels (count / avg speed / congestion) and a pause/resume
+      button — all verified live. Remaining: deploy the static page (S3 + CloudFront).
 - [ ] Wk 19–21: CI/CD, docs, demo recording (40h)
       GitHub Actions pipeline, README, architecture diagram, 2-min demo video
 
@@ -37,6 +40,36 @@ Project context for Claude Code. Read this before touching any file.
 - [ ] Final README, screenshots, live demo URL
 - [ ] CV update and LinkedIn write-up
 - [ ] Start applying at week 21 — do not wait until hour 300
+
+---
+
+## Current status (updated 2026-08-12)
+
+**Done**
+- Phase 1 emitter: `scripts/emitter.py` (`serialize_vehicles`, `Broadcaster`, async WS server)
+  plus `run_traci.py --emit`. Unit-tested (`scripts/tests/test_emitter.py`) and verified live
+  against real SUMO. Branch `phase1-websocket-emitter`, 2 commits, pushed — **PR not yet opened**.
+- Live dashboard core (roadmap Wk 13–18, built early): `intersection_map.html` now has a
+  WebSocket client and speed-coloured vehicle markers (red <3 m/s, amber 3–8, green ≥8 m/s).
+  Verified live — 300+ vehicles rendering and updating each tick, congested corridors show red.
+
+**Next**
+- Recommended: **Phase 2 cloud pipeline** (API Gateway → Lambda → InfluxDB, Terraform) — see below.
+- Live-dashboard core is complete (3 Chart.js panels + pause/resume, verified live);
+  remaining dashboard work is deploying the static page (S3 + CloudFront).
+- Housekeeping: open the Phase 1 PR (`brew install gh`, or the GitHub branch compare URL).
+
+**Runtime gotchas (learned the hard way)**
+- The emitter needs `pyproj` at runtime (via `sumolib.convertXY2LonLat`) — without it it crashes
+  on the first broadcast. Run it from a venv where you ran `pip install -r requirements.txt`,
+  not a hand-rolled one.
+- Working SUMO on this Mac is the **from-source build**: `SUMO_HOME=~/sumo/sumo-1.27.1`.
+- `sim_pipeline.py` locates SUMO via a Windows-only path (`C:\Sumo` + `netconvert.exe`).
+  `run_traci.py` adds a purely additive `$SUMO_HOME` fallback (`_ensure_sumo_tools`) so
+  macOS/Linux work without touching the protected file.
+- Ports: **8813** TraCI · **8765** emitter WebSocket · serve the map on a *different* port
+  (e.g. **8000**), never 8765. Serve it from the `smart_city_digital_twin/` folder so the
+  map's `../data/output/intersection_geo.csv` fetch resolves.
 
 ---
 
@@ -102,8 +135,8 @@ A Christchurch CBD traffic simulation (SUMO-based) extended with a cloud data pi
 - `smart_city_digital_twin/3D_simulation/` — Unity 3D twin, out of scope for this project
 
 ### Existing scripts to extend (not rewrite)
-- `smart_city_digital_twin/2D_simulation/scripts/run_traci.py` — TraCI control loop. Currently steps the simulation and prints status to console only. **This is the first file to extend.**
-- `smart_city_digital_twin/2D_simulation/scripts/intersection_map.html` — Leaflet map of intersections. Loads a static CSV once. **This is the frontend to extend.**
+- `smart_city_digital_twin/2D_simulation/scripts/run_traci.py` — TraCI control loop. **Now extended** with the `--emit` JSON/WebSocket emitter (see Current status). The original stepping/`_print_status` behaviour is unchanged when `--emit` is omitted.
+- `smart_city_digital_twin/2D_simulation/scripts/intersection_map.html` — Leaflet map. **Now extended** with a WebSocket client and speed-coloured vehicle markers.
 
 ### What run_traci.py currently does
 Connects to SUMO via TraCI on port 8813. Jumps to sim time 23400s (06:30). Steps the simulation in a `while True` loop. Calls `_print_status()` every 60 sim seconds — this just prints to terminal. No JSON output, no WebSocket, no data persistence. The per-step hook is here:
@@ -116,8 +149,8 @@ if int(t) % 60 == 0:
 
 This is where the emitter call goes.
 
-### What intersection_map.html currently does
-A Leaflet map centred on Christchurch CBD (-43.53, 172.636). Fetches `../data/output/intersection_geo.csv` once on load and renders 96 intersection nodes and their directional links. No WebSocket client. No vehicle layer. No live data of any kind. Uses Leaflet 1.9.4 from CDN.
+### What intersection_map.html does
+A Leaflet map centred on Christchurch CBD (-43.53, 172.636). Fetches `../data/output/intersection_geo.csv` on load and renders 96 intersection nodes and their directional links (Leaflet 1.9.4 from CDN). **It now also has a live vehicle layer:** a WebSocket client (`ws://localhost:8765`, Connect/Disconnect buttons) that consumes the emitter schema and draws one circle marker per vehicle, colour-coded by speed via `colorForSpeed` (red <3, amber 3–8, green ≥8 m/s), adding/moving/removing markers each tick. Still missing (roadmap Wk 13–18): the 3 Chart.js panels and a pause/resume control.
 
 ---
 
@@ -218,9 +251,11 @@ demo_smart_city_digital_twin/
     │   │       ├── demand/            ← .rou.xml files
     │   │       └── intersection_geo.csv
     │   └── scripts/
-    │       ├── run_traci.py           ← EXTEND THIS FIRST
+    │       ├── run_traci.py           ← extended with --emit (Phase 1, done)
+    │       ├── emitter.py             ← NEW: serialiser + WebSocket broadcaster
+    │       ├── tests/test_emitter.py  ← NEW: serialiser unit tests (no SUMO needed)
     │       ├── sim_pipeline.py        ← do not modify
-    │       ├── intersection_map.html  ← EXTEND FOR DASHBOARD
+    │       ├── intersection_map.html  ← extended with WS client + vehicle markers
     │       └── [other pipeline scripts — do not modify]
     └── 3D_simulation/                 ← Unity project, out of scope
 ```
@@ -233,9 +268,12 @@ demo_smart_city_digital_twin/
 cd smart_city_digital_twin
 python3 -m venv .venv
 source .venv/bin/activate          # Windows: .venv\Scripts\activate
-pip install -r 2D_simulation/requirements.txt
-pip install websockets asyncio     # new dependencies for emitter
+pip install -r 2D_simulation/requirements.txt   # includes websockets + pyproj — both needed by the emitter
 ```
+
+> The emitter needs `pyproj` at runtime (sumolib coordinate conversion) and `websockets`
+> for the server. Both are in requirements.txt, so always run the emitter from a venv you
+> populated with `pip install -r requirements.txt` — a minimal venv will crash on first broadcast.
 
 SUMO must be installed and on PATH. Project tested with SUMO 1.27.1 (also fine for the
 1.26 target — no config changes needed between them).
@@ -344,11 +382,16 @@ python3 scripts/run_traci.py --no-gui --jump-to 23400 --end 23430   # real TraCI
 
 ---
 
-## Where to start — first task
+## Where to start — next task
 
-**Add a JSON emitter to `run_traci.py`.**
+The JSON emitter (Phase 1) and the live-map client are **done** (see Current status). The
+recommended next task is the **Phase 2 cloud pipeline**: stand up the AWS WebSocket API
+Gateway → Lambda (metrics) → InfluxDB Cloud path, with Terraform IaC (see "AWS resources"
+above). Two smaller alternatives if you want a quicker win first: finish the live dashboard
+(3 Chart.js panels + pause/resume) or open the Phase 1 PR.
 
-Specifically:
+<details><summary>Original Phase 1 emitter brief (completed — kept for reference)</summary>
+
 1. Load the SUMO net file with `sumolib` to get the coordinate converter
 2. Write a `serialize_vehicles(traci, net)` function that returns the JSON schema above
 3. Write an async WebSocket server using `websockets` that broadcasts to all connected clients
@@ -357,7 +400,9 @@ Specifically:
 6. Add `--emit-interval SEC` argument (default 1 step, i.e. every step)
 7. Write a unit test for `serialize_vehicles()` using a mock traci object
 
-Do not change the existing TraCI connection logic, argument parser structure, or `_print_status` function. Add alongside, do not replace.
+Existing TraCI connection logic, argument parser structure, and `_print_status` were left
+unchanged — the emitter was added alongside, not in place of, them.
+</details>
 
 ---
 

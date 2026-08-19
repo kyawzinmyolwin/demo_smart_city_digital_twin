@@ -1,0 +1,8 @@
+# Copy to terraform.tfvars and adjust. All values have sensible defaults; this
+# file just documents the knobs.
+
+# aws_region   = "ap-southeast-2"   # Sydney, closest AWS region to NZ
+# project_name = "christchurch-twin"
+# stage_name   = "dev"
+# free_flow_mps = 13.889            # 50 km/h; raise for arterial/motorway scenarios
+# log_retention_days = 14
