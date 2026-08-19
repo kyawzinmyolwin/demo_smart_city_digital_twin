@@ -3,7 +3,7 @@
 # These name the S3 bucket + DynamoDB lock table you created by hand during
 # bootstrap (see README.md). backend.hcl itself is gitignored.
 
-bucket         = "your-tf-state-bucket-name-must-be-globally-unique"
+bucket = "christchurch-twin-tfstate-kzml7"
 key            = "christchurch-digital-twin/prod/terraform.tfstate"
 region         = "ap-southeast-2"
 dynamodb_table = "tf-state-lock"
