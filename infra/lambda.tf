@@ -177,3 +177,14 @@ resource "aws_lambda_function_url" "replay" {
     max_age       = 3600
   }
 }
+
+# A "NONE" auth Function URL still needs an explicit resource-based permission
+# granting public invoke — the console adds this automatically, Terraform does not.
+# Without it the URL returns 403 Forbidden.
+resource "aws_lambda_permission" "replay_url_public" {
+  statement_id           = "AllowPublicFunctionUrl"
+  action                 = "lambda:InvokeFunctionUrl"
+  function_name          = aws_lambda_function.replay.function_name
+  principal              = "*"
+  function_url_auth_type = "NONE"
+}

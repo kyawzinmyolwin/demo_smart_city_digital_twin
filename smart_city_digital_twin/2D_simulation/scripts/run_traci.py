@@ -25,7 +25,7 @@ import time
 from pathlib import Path
 
 from _sim_root import SIM_ROOT  # noqa: E402
-from emitter import Broadcaster, serialize_vehicles, serve, to_json
+from emitter import Broadcaster, CloudForwarder, serialize_vehicles, serve, to_json
 from sim_pipeline import SUMOCFG, setup_sumolib, sumo_bin
 
 # Earliest vehicle depart in data/output/demand/traffic_trips.routed.rou.xml (06:30).
@@ -122,9 +122,19 @@ async def _run_emitting(traci, args) -> None:
     we take the next (blocking) simulation step.
     """
     net = _load_net()
-    broadcaster = Broadcaster()
-    server = await serve(broadcaster, args.emit_host, args.emit_port)
-    print(f"Emitter live on ws://{args.emit_host}:{args.emit_port} (sim id: {args.sim_id})")
+
+    # Two independent sinks: a local WebSocket server (--emit, for the browser
+    # dashboard) and/or a cloud forwarder (--emit-target, dials out to API Gateway).
+    broadcaster = None
+    server = None
+    forwarder = None
+    if args.emit:
+        broadcaster = Broadcaster()
+        server = await serve(broadcaster, args.emit_host, args.emit_port)
+        print(f"Emitter live on ws://{args.emit_host}:{args.emit_port} (sim id: {args.sim_id})")
+    if args.emit_target:
+        forwarder = CloudForwarder(args.emit_target)
+        print(f"Forwarding snapshots to {args.emit_target}")
 
     step = 0
     try:
@@ -133,16 +143,24 @@ async def _run_emitting(traci, args) -> None:
             t = traci.simulation.getTime()
             traci.simulationStep()
             step += 1
-            # Only serialise when someone is listening — no clients, no work.
-            if broadcaster.client_count and step % args.emit_interval == 0:
+            # Serialise once per emitted tick, only if a sink actually needs it
+            # (a local client is connected, or we're forwarding to the cloud).
+            local_wants = broadcaster is not None and broadcaster.client_count
+            if step % args.emit_interval == 0 and (local_wants or forwarder is not None):
                 snapshot = serialize_vehicles(traci, net, args.sim_id)
-                await broadcaster.broadcast(to_json(snapshot))
+                if local_wants:
+                    await broadcaster.broadcast(to_json(snapshot))
+                if forwarder is not None:
+                    await forwarder.send(snapshot)
             if int(t) % 60 == 0:
                 _print_status(traci)
-            await asyncio.sleep(0)  # yield to the WebSocket server
+            await asyncio.sleep(0)  # yield to the WebSocket server / forwarder
     finally:
-        server.close()
-        await server.wait_closed()
+        if server is not None:
+            server.close()
+            await server.wait_closed()
+        if forwarder is not None:
+            await forwarder.close()
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -212,6 +230,14 @@ def build_parser() -> argparse.ArgumentParser:
         default=DEFAULT_SIM_ID,
         help=f"Scenario id echoed to clients (default: {DEFAULT_SIM_ID})",
     )
+    p.add_argument(
+        "--emit-target",
+        default=None,
+        metavar="WSS_URL",
+        help="Also forward each snapshot to this WebSocket URL as a 'sendmessage' "
+        "action (e.g. the cloud API Gateway wss:// URL). Can be used with or "
+        "without --emit.",
+    )
     return p
 
 
@@ -263,9 +289,10 @@ def main() -> int:
             step_to(traci, args.jump_to, chunk=args.chunk)
             print("Jump complete.")
 
-        if args.emit:
+        if args.emit or args.emit_target:
             # Emitting path: run the loop inside an asyncio event loop so the
-            # WebSocket server runs concurrently with the TraCI stepping.
+            # WebSocket server and/or cloud forwarder run concurrently with the
+            # TraCI stepping.
             asyncio.run(_run_emitting(traci, args))
         else:
             print("Running simulation ...")

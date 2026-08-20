@@ -132,3 +132,50 @@ async def serve(broadcaster: Broadcaster, host: str, port: int):
             broadcaster.unregister(ws)
 
     return await websockets.serve(handler, host, port)
+
+
+def wrap_sendmessage(snapshot: dict[str, Any]) -> str:
+    """Wrap a snapshot in the envelope API Gateway routes on.
+
+    The WebSocket API selects a route from ``$request.body.action``, so the top
+    level must carry ``action: "sendmessage"``; the snapshot rides under ``data``
+    (what the traffic-ingest Lambda reads). Pure + trivially unit-testable.
+    """
+    return json.dumps({"action": "sendmessage", "data": snapshot}, separators=(",", ":"))
+
+
+class CloudForwarder:
+    """Forwards each snapshot to a WebSocket target (e.g. the API Gateway URL).
+
+    This is the client counterpart to ``serve``: instead of hosting a server for
+    browsers, the emitter dials OUT to the cloud endpoint and posts each tick.
+    Resilient by design — a dropped connection is logged and retried on the next
+    tick rather than crashing the simulation loop.
+    """
+
+    def __init__(self, url: str) -> None:
+        self.url = url
+        self._ws: Any = None
+
+    async def _ensure(self) -> None:
+        if self._ws is None:
+            import websockets
+
+            self._ws = await websockets.connect(self.url)
+
+    async def send(self, snapshot: dict[str, Any]) -> None:
+        payload = wrap_sendmessage(snapshot)
+        try:
+            await self._ensure()
+            await self._ws.send(payload)
+        except Exception as exc:  # noqa: BLE001 — never let a cloud blip stop the sim
+            print(f"cloud forward failed ({exc}); will reconnect next tick")
+            self._ws = None
+
+    async def close(self) -> None:
+        if self._ws is not None:
+            try:
+                await self._ws.close()
+            except Exception:  # noqa: BLE001
+                pass
+            self._ws = None

@@ -22,12 +22,16 @@ Project context for Claude Code. Read this before touching any file.
 - [x] Wk 3–6: JSON emitter + WebSocket server (25h)
       DONE. scripts/emitter.py + run_traci.py --emit. Unit-tested and verified live against
       real SUMO. Branch phase1-websocket-emitter (2 commits, pushed; PR not yet opened).
-- [ ] Wk 7–12: Cloud data pipeline (50h) ← NEXT
-      API Gateway, Lambda (ingest + metrics + replay), InfluxDB Cloud, Terraform IaC
+- [x] Wk 7–12: Cloud data pipeline (50h)
+      DONE — deployed & verified end-to-end. infra/ Terraform: WebSocket API Gateway,
+      3 Lambdas (ingest/metrics/replay), DynamoDB connections table, S3+CloudFront,
+      Secrets Manager, CloudWatch logs + billing alarm. Live on AWS ap-southeast-2 +
+      InfluxDB Cloud. Open: wire the emitter to the cloud (client mode) ← NEXT.
 - [~] Wk 13–18: Live dashboard (55h) — CORE DONE (built early, out of order)
       intersection_map.html has the WebSocket client, speed-coloured vehicle markers,
       3 live Chart.js panels (count / avg speed / congestion) and a pause/resume
-      button — all verified live. Remaining: deploy the static page (S3 + CloudFront).
+      button — all verified live. S3+CloudFront hosting is deployed (infra); still to
+      do: upload the HTML to S3, and wire the historical charts to the replay endpoint.
 - [ ] Wk 19–21: CI/CD, docs, demo recording (40h)
       GitHub Actions pipeline, README, architecture diagram, 2-min demo video
 
@@ -43,33 +47,65 @@ Project context for Claude Code. Read this before touching any file.
 
 ---
 
-## Current status (updated 2026-08-12)
+## Current status (updated 2026-08-19)
 
-**Done**
+**Done (all merged to main)**
 - Phase 1 emitter: `scripts/emitter.py` (`serialize_vehicles`, `Broadcaster`, async WS server)
-  plus `run_traci.py --emit`. Unit-tested (`scripts/tests/test_emitter.py`) and verified live
-  against real SUMO. Branch `phase1-websocket-emitter`, 2 commits, pushed — **PR not yet opened**.
-- Live dashboard core (roadmap Wk 13–18, built early): `intersection_map.html` now has a
-  WebSocket client and speed-coloured vehicle markers (red <3 m/s, amber 3–8, green ≥8 m/s).
-  Verified live — 300+ vehicles rendering and updating each tick, congested corridors show red.
+  plus `run_traci.py --emit`. Unit-tested (`scripts/tests/test_emitter.py`), verified live.
+- Live dashboard core: `intersection_map.html` — WebSocket client, speed-coloured markers
+  (red <3 m/s, amber 3–8, green ≥8), 3 Chart.js panels (count / avg speed / congestion),
+  pause/resume. Verified live.
+- Local metrics pipeline: `scripts/metrics.py` (`compute_tick_metrics`, pure + unit-tested,
+  `tests/test_metrics.py`) and `scripts/metrics_writer.py` (WS feed → compute → InfluxDB).
+  Verified end-to-end: SUMO → emitter → writer → local InfluxDB.
+- Local InfluxDB: `docker-compose.yml` + `.env` (InfluxDB 2.7). On the Intel Mac Mini use
+  **Colima** (Docker Desktop is unsupported on macOS 13): `colima start && docker compose up -d`.
+- **Phase 2 cloud pipeline — BUILT, DEPLOYED, VERIFIED end-to-end.** `infra/` Terraform:
+  WebSocket API Gateway, 3 Lambdas (ingest/metrics/replay), DynamoDB connections table,
+  S3+CloudFront dashboard host, Secrets Manager, CloudWatch logs + billing alarm. Deployed to
+  AWS `ap-southeast-2` + InfluxDB Cloud. Verified: a test message → API Gateway → ingest →
+  metrics (`compute_tick_metrics`) → InfluxDB Cloud (the `5.5` point). `metrics.py` is copied
+  into `infra/functions/traffic_metrics/` as the Lambda body — keep the two in sync.
+- **Emitter → cloud client mode DONE & verified with REAL data.** `run_traci.py --emit-target
+  wss://…` (`CloudForwarder` + `wrap_sendmessage` in emitter.py) dials out to API Gateway and
+  posts `{"action":"sendmessage","data":{…}}` per tick — resilient (reconnects, never crashes
+  the sim), usable with or without `--emit`. Verified end-to-end from the Vagrant VM: live SUMO
+  traffic → API Gateway → Lambdas → InfluxDB Cloud. Throttle with `--emit-interval N` (every
+  tick would flood API Gateway); WebSocket messages cap at 128 KB (a ~600-vehicle snapshot ~50 KB).
 
 **Next**
-- Recommended: **Phase 2 cloud pipeline** (API Gateway → Lambda → InfluxDB, Terraform) — see below.
-- Live-dashboard core is complete (3 Chart.js panels + pause/resume, verified live);
-  remaining dashboard work is deploying the static page (S3 + CloudFront).
-- Housekeeping: open the Phase 1 PR (`brew install gh`, or the GitHub branch compare URL).
+- Replay **public-URL access** (403): the Lambda Function URL denies anonymous access on this
+  account even with AuthType NONE + a public resource policy (NOT an org SCP — the account
+  isn't in an org; cause unresolved, likely an account restriction). The replay *function*
+  works (verified via `aws lambda invoke`). When building the historical-replay UI, front
+  replay with API Gateway or IAM-signed requests rather than a public URL.
+- Dashboard historical **charts** reading from the replay endpoint; upload `intersection_map.html`
+  to the S3 bucket so CloudFront serves it.
 
 **Runtime gotchas (learned the hard way)**
 - The emitter needs `pyproj` at runtime (via `sumolib.convertXY2LonLat`) — without it it crashes
-  on the first broadcast. Run it from a venv where you ran `pip install -r requirements.txt`,
-  not a hand-rolled one.
-- Working SUMO on this Mac is the **from-source build**: `SUMO_HOME=~/sumo/sumo-1.27.1`.
-- `sim_pipeline.py` locates SUMO via a Windows-only path (`C:\Sumo` + `netconvert.exe`).
-  `run_traci.py` adds a purely additive `$SUMO_HOME` fallback (`_ensure_sumo_tools`) so
-  macOS/Linux work without touching the protected file.
-- Ports: **8813** TraCI · **8765** emitter WebSocket · serve the map on a *different* port
-  (e.g. **8000**), never 8765. Serve it from the `smart_city_digital_twin/` folder so the
-  map's `../data/output/intersection_geo.csv` fetch resolves.
+  on the first broadcast. Run from a venv populated with `pip install -r requirements.txt`.
+- Working SUMO on the Mac is the **from-source build**: `SUMO_HOME=~/sumo/sumo-1.27.1`.
+  `sim_pipeline.py` finds SUMO via a Windows-only path; `run_traci.py`'s `_ensure_sumo_tools`
+  adds a `$SUMO_HOME` fallback so macOS/Linux work without touching the protected file.
+- Ports: **8813** TraCI · **8765** emitter WebSocket · serve the map on **8000** (never 8765),
+  from the `smart_city_digital_twin/` folder so its CSV fetch resolves.
+- **InfluxDB Cloud ≠ local Docker InfluxDB.** The AWS Lambda can't reach `localhost:8086`; it
+  writes to hosted **InfluxDB Cloud** (separate free account; `influxdb_url`/`influxdb_org` in
+  tfvars, All-Access token in Secrets Manager — NOT the local `.env` token).
+- **Secrets Manager blocks `destroy` → `apply`.** Deleting a secret schedules a 7-day recovery
+  window; the next apply can't recreate a same-named secret, so the whole Lambda chain fails to
+  create (partial state). Fix: `recovery_window_in_days = 0` in `storage.tf`, or
+  `aws secretsmanager delete-secret --force-delete-without-recovery` then re-apply.
+- **Lambda Function URL (auth NONE) needs an explicit `aws_lambda_permission`**
+  (`lambda:InvokeFunctionUrl`, principal `*`) — the console adds it, Terraform doesn't. Even
+  with it, anonymous access may still 403 on some accounts (see "Next").
+- **S3 bucket names**: lowercase, hyphens (no underscores/uppercase), globally unique.
+- **Region**: `ap-southeast-2` (closest to NZ + InfluxDB Cloud). Billing alarm must be
+  `us-east-1` (provider alias in `observability.tf`). Pin `--region` on CLI calls, or
+  `aws configure set region ap-southeast-2`.
+- **Cloud is run from the Vagrant VM** (ubuntu/jammy) — terraform + aws CLI live there, not on
+  the Mac Mini (old macOS). Infra costs ~$0.40/mo idle (Secrets Manager); $5 billing alarm set.
 
 ---
 
