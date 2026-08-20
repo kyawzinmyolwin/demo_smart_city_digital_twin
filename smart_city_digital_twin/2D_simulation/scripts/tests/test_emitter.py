@@ -15,7 +15,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from emitter import serialize_vehicles, to_json  # noqa: E402
+from emitter import serialize_vehicles, to_json, wrap_sendmessage  # noqa: E402
 
 
 class FakeVehicleDomain:
@@ -98,6 +98,16 @@ def test_to_json_roundtrips():
 
     snap = serialize_vehicles(FakeTraci(), FakeNet(), sim_id="s")
     assert json.loads(to_json(snap)) == snap
+
+
+def test_wrap_sendmessage_envelope():
+    import json
+
+    snap = serialize_vehicles(FakeTraci(), FakeNet(), sim_id="s")
+    wrapped = json.loads(wrap_sendmessage(snap))
+    # API Gateway routes on the top-level "action"; the snapshot rides under "data".
+    assert wrapped["action"] == "sendmessage"
+    assert wrapped["data"] == snap
 
 
 if __name__ == "__main__":

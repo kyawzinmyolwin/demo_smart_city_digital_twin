@@ -66,11 +66,14 @@ Project context for Claude Code. Read this before touching any file.
   AWS `ap-southeast-2` + InfluxDB Cloud. Verified: a test message → API Gateway → ingest →
   metrics (`compute_tick_metrics`) → InfluxDB Cloud (the `5.5` point). `metrics.py` is copied
   into `infra/functions/traffic_metrics/` as the Lambda body — keep the two in sync.
+- **Emitter → cloud client mode DONE & verified with REAL data.** `run_traci.py --emit-target
+  wss://…` (`CloudForwarder` + `wrap_sendmessage` in emitter.py) dials out to API Gateway and
+  posts `{"action":"sendmessage","data":{…}}` per tick — resilient (reconnects, never crashes
+  the sim), usable with or without `--emit`. Verified end-to-end from the Vagrant VM: live SUMO
+  traffic → API Gateway → Lambdas → InfluxDB Cloud. Throttle with `--emit-interval N` (every
+  tick would flood API Gateway); WebSocket messages cap at 128 KB (a ~600-vehicle snapshot ~50 KB).
 
 **Next**
-- **Wire the real emitter to the cloud**: add an `--emit-target wss://…` client mode so
-  `run_traci.py` dials out to API Gateway and posts `{"action":"sendmessage","data":{…}}`,
-  instead of hosting a WS server. (Not built yet — this is the immediate next task.)
 - Replay **public-URL access** (403): the Lambda Function URL denies anonymous access on this
   account even with AuthType NONE + a public resource policy (NOT an org SCP — the account
   isn't in an org; cause unresolved, likely an account restriction). The replay *function*
