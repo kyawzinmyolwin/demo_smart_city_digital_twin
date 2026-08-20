@@ -72,15 +72,25 @@ Project context for Claude Code. Read this before touching any file.
   the sim), usable with or without `--emit`. Verified end-to-end from the Vagrant VM: live SUMO
   traffic → API Gateway → Lambdas → InfluxDB Cloud. Throttle with `--emit-interval N` (every
   tick would flood API Gateway); WebSocket messages cap at 128 KB (a ~600-vehicle snapshot ~50 KB).
+- **Dashboard historical charts DONE (local) + verified.** intersection_map.html has a "History
+  (from InfluxDB)" panel (field + range + Load) that fetches from a read endpoint and renders a
+  Chart.js line. Endpoint is `scripts/replay_server.py` — the local dev mirror of the traffic-replay
+  Lambda (holds the token, proxies Flux range queries, CORS). Configurable via `?replay=<url>`
+  (default `http://localhost:8788/metrics`). Verified: browser → replay_server → local InfluxDB → chart.
+- **Deployed dashboard fix**: intersection_map.html had a fatal duplicate-chart-block from a bad
+  merge (two `let paused`/`const MAX_POINTS` → SyntaxError killed the whole page). Removed the
+  stale block. NOTE: the broken version still lives on other branches — re-merging them re-breaks
+  main (has happened via PRs #15–18). Fix the source branches or the dashboard keeps dying.
 
 **Next**
 - Replay **public-URL access** (403): the Lambda Function URL denies anonymous access on this
   account even with AuthType NONE + a public resource policy (NOT an org SCP — the account
   isn't in an org; cause unresolved, likely an account restriction). The replay *function*
-  works (verified via `aws lambda invoke`). When building the historical-replay UI, front
-  replay with API Gateway or IAM-signed requests rather than a public URL.
-- Dashboard historical **charts** reading from the replay endpoint; upload `intersection_map.html`
-  to the S3 bucket so CloudFront serves it.
+  works (verified via `aws lambda invoke`). To make the DEPLOYED dashboard's history charts work,
+  front replay with API Gateway (or IAM-signed requests) and point the page at it via
+  `?replay=<url>` — a public Function URL won't work here.
+- Upload `intersection_map.html` to the S3 bucket (aws s3 cp) + CloudFront invalidation so the
+  hosted dashboard serves the current version.
 
 **Runtime gotchas (learned the hard way)**
 - The emitter needs `pyproj` at runtime (via `sumolib.convertXY2LonLat`) — without it it crashes
