@@ -1,0 +1,120 @@
+<title>Original Architecture</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  html,body{margin:0;padding:0;background:#eef2f7}
+  #slide{width:1600px;height:900px;background:#f7f9fc}
+  .disp{font-family:"Sora","Segoe UI",system-ui,sans-serif}
+  .body{font-family:"IBM Plex Sans","Segoe UI",system-ui,sans-serif}
+  .mono{font-family:"IBM Plex Mono",ui-monospace,monospace}
+</style>
+
+<div id="slide">
+<svg viewBox="0 0 1600 900" width="1600" height="900" role="img"
+     aria-label="Original architecture before the emitter and cloud pipeline: an offline build pipeline produces static SUMO assets; run_traci.py steps the simulation and only prints status to the terminal; intersection_map.html shows static geometry from a CSV. The simulation and the map are not connected — live vehicle state never leaves the process.">
+  <defs>
+    <marker id="arGrey" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#8393a4"/>
+    </marker>
+    <marker id="arGrey2" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto">
+      <path d="M0 0 L10 5 L0 10 z" fill="#8393a4"/>
+    </marker>
+    <marker id="arRed" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#e0413b"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="1600" height="900" fill="#f7f9fc"/>
+
+  <!-- title block -->
+  <text x="800" y="78" text-anchor="middle" class="mono" fill="#64748b"
+        font-size="17" letter-spacing="3.5">COMP 693 · BASELINE — BEFORE THE EMITTER + CLOUD PIPELINE</text>
+  <text x="800" y="134" text-anchor="middle" class="disp" fill="#14202b"
+        font-size="42" font-weight="700">Original Architecture</text>
+  <text x="800" y="174" text-anchor="middle" class="body" fill="#5a6b7d"
+        font-size="20">A local, offline simulation — no streaming, no persistence, and no link between the sim and the map</text>
+
+  <!-- ============ OFFLINE PREPARATION STRIP ============ -->
+  <rect x="70" y="206" width="1460" height="126" rx="16" fill="#edf1f6" stroke="#cbd5e1" stroke-width="1.5" stroke-dasharray="7 6"/>
+  <text x="92" y="236" class="mono" fill="#7b8a9a" font-size="13.5" letter-spacing="2">OFFLINE PREPARATION · ONE-TIME CALIBRATION</text>
+
+  <!-- A real-world data -->
+  <rect x="92" y="250" width="400" height="66" rx="11" fill="#ffffff" stroke="#b7c4d2" stroke-width="1.5"/>
+  <text x="112" y="280" class="disp" fill="#14202b" font-size="17" font-weight="600">Real-world data</text>
+  <text x="112" y="302" class="mono" fill="#7b8a9a" font-size="12">Miovision counts · CCC ArcGIS geometry</text>
+  <!-- B build pipeline -->
+  <rect x="540" y="250" width="400" height="66" rx="11" fill="#ffffff" stroke="#b7c4d2" stroke-width="1.5"/>
+  <text x="560" y="280" class="disp" fill="#14202b" font-size="17" font-weight="600">SUMO build pipeline</text>
+  <text x="560" y="302" class="mono" fill="#7b8a9a" font-size="12">create_network · create_demand · sim_pipeline</text>
+  <!-- C static assets -->
+  <rect x="988" y="250" width="440" height="66" rx="11" fill="#ffffff" stroke="#b7c4d2" stroke-width="1.5"/>
+  <text x="1008" y="280" class="disp" fill="#14202b" font-size="17" font-weight="600">Static assets</text>
+  <text x="1008" y="302" class="mono" fill="#7b8a9a" font-size="12">.net.xml · .rou.xml · intersection_geo.csv</text>
+
+  <line x1="496" y1="283" x2="536" y2="283" stroke="#8393a4" stroke-width="2.2" marker-end="url(#arGrey)"/>
+  <line x1="944" y1="283" x2="984" y2="283" stroke="#8393a4" stroke-width="2.2" marker-end="url(#arGrey)"/>
+
+  <!-- feeders down from the offline strip -->
+  <line x1="230" y1="332" x2="230" y2="424" stroke="#8393a4" stroke-width="2.2" marker-end="url(#arGrey)"/>
+  <text x="244" y="392" class="mono" fill="#5a6b7d" font-size="12.5">.net.xml · .rou.xml</text>
+
+  <line x1="1280" y1="332" x2="1280" y2="464" stroke="#8393a4" stroke-width="2.2" marker-end="url(#arGrey)"/>
+  <text x="1296" y="392" class="mono" fill="#5a6b7d" font-size="12.5">intersection_geo.csv</text>
+
+  <!-- ============ SIMULATION RUNTIME (left) ============ -->
+  <!-- SUMO -->
+  <rect x="110" y="430" width="240" height="120" rx="15" fill="#ffffff" stroke="#4f74e0" stroke-width="2.5"/>
+  <circle cx="140" cy="466" r="7" fill="#4f74e0"/>
+  <text x="158" y="471" class="mono" fill="#4f74e0" font-size="14" letter-spacing="1.5">SIMULATE</text>
+  <text x="134" y="512" class="disp" fill="#14202b" font-size="26" font-weight="600">SUMO</text>
+  <text x="134" y="536" class="body" fill="#5a6b7d" font-size="14.5">microsimulation</text>
+
+  <!-- run_traci -->
+  <rect x="460" y="430" width="270" height="120" rx="15" fill="#ffffff" stroke="#4f74e0" stroke-width="2.5"/>
+  <text x="486" y="474" class="disp" fill="#14202b" font-size="23" font-weight="600">run_traci.py</text>
+  <text x="486" y="503" class="body" fill="#5a6b7d" font-size="14.5">steps the sim ·</text>
+  <text x="486" y="524" class="mono" fill="#5a6b7d" font-size="13.5">_print_status()</text>
+
+  <!-- terminal -->
+  <rect x="770" y="430" width="250" height="120" rx="15" fill="#14202b" stroke="#14202b"/>
+  <text x="792" y="466" class="mono" fill="#4ade80" font-size="13.5">● TERMINAL</text>
+  <text x="792" y="496" class="mono" fill="#e6edf4" font-size="14">vehicles: 214</text>
+  <text x="792" y="518" class="mono" fill="#93a4b6" font-size="14">avg 6.9 m/s  t=23460</text>
+  <text x="895" y="576" text-anchor="middle" class="mono" fill="#8595a6" font-size="12.5">text only · every 60 s · ephemeral</text>
+
+  <!-- TraCI double arrow -->
+  <line x1="356" y1="490" x2="454" y2="490" stroke="#8393a4" stroke-width="2.4"
+        marker-start="url(#arGrey2)" marker-end="url(#arGrey)"/>
+  <text x="405" y="478" text-anchor="middle" class="mono" fill="#5a6b7d" font-size="12.5">TraCI :8813</text>
+
+  <!-- prints arrow -->
+  <line x1="736" y1="490" x2="764" y2="490" stroke="#8393a4" stroke-width="2.4" marker-end="url(#arGrey)"/>
+  <text x="750" y="478" text-anchor="middle" class="mono" fill="#5a6b7d" font-size="11.5">prints</text>
+
+  <!-- ============ BROWSER (right) ============ -->
+  <rect x="1080" y="470" width="400" height="200" rx="16" fill="#ffffff" stroke="#0e8fb0" stroke-width="2.5"/>
+  <circle cx="1108" cy="502" r="7" fill="#0e8fb0"/>
+  <text x="1126" y="507" class="mono" fill="#0e8fb0" font-size="14" letter-spacing="1.5">BROWSER · STATIC</text>
+  <text x="1104" y="548" class="disp" fill="#14202b" font-size="22" font-weight="600">intersection_map.html</text>
+  <text x="1104" y="582" class="body" fill="#5a6b7d" font-size="15.5">Leaflet — 96 intersection nodes</text>
+  <text x="1104" y="605" class="body" fill="#5a6b7d" font-size="15.5">and their directional links</text>
+  <text x="1104" y="640" class="body" fill="#b4431f" font-size="15.5" font-weight="600">Static geometry — no vehicle layer</text>
+
+  <!-- ============ THE MISSING LINK (thesis) ============ -->
+  <path d="M 595 550 L 595 596 L 1074 596" fill="none" stroke="#e0413b" stroke-width="2.6"
+        stroke-dasharray="9 7" marker-end="url(#arRed)"/>
+  <circle cx="835" cy="596" r="15" fill="#ffffff" stroke="#e0413b" stroke-width="2.4"/>
+  <line x1="827" y1="588" x2="843" y2="604" stroke="#e0413b" stroke-width="2.4"/>
+  <line x1="843" y1="588" x2="827" y2="604" stroke="#e0413b" stroke-width="2.4"/>
+  <text x="835" y="636" text-anchor="middle" class="disp" fill="#e0413b" font-size="16" font-weight="600">no live link</text>
+  <text x="835" y="659" text-anchor="middle" class="body" fill="#7b6a68" font-size="13.5">live vehicle state never leaves the process</text>
+
+  <!-- ============ FOOTER ============ -->
+  <line x1="70" y1="806" x2="1530" y2="806" stroke="#dbe3ec" stroke-width="1.5"/>
+  <text x="70" y="840" class="mono" fill="#8595a6" font-size="14">
+    BEFORE — local desktop only · no WebSocket · no cloud · no database · no persistence</text>
+  <text x="1530" y="840" text-anchor="end" class="mono" fill="#0e8fb0" font-size="14">
+    → next: the emitter + cloud pipeline add the live data path</text>
+</svg>
+</div>
