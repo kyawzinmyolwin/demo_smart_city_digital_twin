@@ -25,6 +25,7 @@ class FakeVehicleDomain:
     _SPEED = {"veh_001": 13.4, "veh_002": 0.0}
     _LANE = {"veh_001": "edge_42_0", "veh_002": "edge_7_1"}
     _ACCEL = {"veh_001": 0.2, "veh_002": -1.5}
+    _TYPE = {"veh_001": "car", "veh_002": "bus"}
 
     def getIDList(self):
         return ("veh_001", "veh_002")
@@ -40,6 +41,9 @@ class FakeVehicleDomain:
 
     def getAcceleration(self, vid):
         return self._ACCEL[vid]
+
+    def getTypeID(self, vid):
+        return self._TYPE[vid]
 
 
 class FakeSimulationDomain:
@@ -79,6 +83,8 @@ def test_snapshot_shape_and_conversion():
     assert v1["speed"] == 13.4
     assert v1["lane"] == "edge_42_0"
     assert v1["accel"] == 0.2
+    assert v1["type"] == "car"
+    assert snap["vehicles"][1]["type"] == "bus"
 
 
 def test_empty_network():

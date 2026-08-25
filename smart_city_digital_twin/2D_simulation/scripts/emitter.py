@@ -58,6 +58,7 @@ def serialize_vehicles(traci: Any, net: Any, sim_id: str) -> dict[str, Any]:
                 "speed": round(traci.vehicle.getSpeed(vid), 3),
                 "lane": traci.vehicle.getLaneID(vid),
                 "accel": round(traci.vehicle.getAcceleration(vid), 3),
+                "type": traci.vehicle.getTypeID(vid),  # "car" / "bus" — drives marker shape
             }
         )
 

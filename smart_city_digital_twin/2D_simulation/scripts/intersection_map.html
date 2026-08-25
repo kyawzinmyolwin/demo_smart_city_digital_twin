@@ -62,6 +62,13 @@
     .veh-marker {
       transition: transform 0.05s linear;
     }
+    /* Buses render as a square divIcon (cars are circleMarkers). The Leaflet
+       default div-icon chrome is neutralised so only our square shows. */
+    .veh-bus-icon { background: transparent; border: none; }
+    .veh-bus {
+      width: 10px; height: 10px; box-sizing: border-box;
+      border: 1px solid #1e293b;
+    }
     .charts-panel {
       position: absolute; z-index: 1000; bottom: 10px; right: 10px;
       background: #fff; padding: 10px 12px; border-radius: 4px;
@@ -113,6 +120,10 @@
         <span class="legend-dot" style="background:#16a34a;"></span>free-flow
         <span class="legend-dot" style="background:#f59e0b;"></span>slow
         <span class="legend-dot" style="background:#dc2626;"></span>congested
+      </div>
+      <div class="legend">
+        <span class="legend-dot" style="background:#64748b;"></span>car (circle)
+        <span class="legend-dot" style="background:#64748b;border-radius:0;"></span>bus (square)
       </div>
       <div class="hint" style="margin-top:6px;">
         Connects to the WebSocket emitter (<code>run_traci.py --emit</code>).
@@ -623,29 +634,45 @@
     return "#16a34a";
   }
 
+  // Bus marker: a square divIcon filled with the speed colour. Buses are ~2% of
+  // traffic, so recreating this icon on update is cheap; cars stay on the fast
+  // circleMarker path (setStyle recolour, no recreation).
+  function busIcon(color) {
+    return L.divIcon({
+      className: "veh-bus-icon",
+      html: '<div class="veh-bus" style="background:' + color + '"></div>',
+      iconSize: [10, 10],
+      iconAnchor: [5, 5],
+    });
+  }
+
   function updateVehicles(vehicles) {
     const seen = new Set();
     (vehicles || []).forEach(function (v) {
       if (!v || v.lat == null || v.lng == null) return;
       seen.add(v.id);
       const color = colorForSpeed(v.speed);
+      const isBus = v.type === "bus";
       let m = vehicleMarkers.get(v.id);
-      const speedTxt = isFinite(v.speed) ? v.speed.toFixed(1) + " m/s" : "—";
-      const tip = v.id + " · " + speedTxt + " · " + (v.lane || "");
+      const speedTxt = isFinite(v.speed) ? (v.speed * 3.6).toFixed(0) + " km/h" : "—";
+      const tip = v.id + " · " + (v.type || "car") + " · " + speedTxt + " · " + (v.lane || "");
       if (!m) {
-        m = L.circleMarker([v.lat, v.lng], {
-          radius: 4,
-          className: "veh-marker",
-          color: "#1e293b",
-          weight: 1,
-          fillColor: color,
-          fillOpacity: 0.9,
-        }).addTo(vehicleLayer);
+        m = isBus
+          ? L.marker([v.lat, v.lng], { icon: busIcon(color) }).addTo(vehicleLayer)
+          : L.circleMarker([v.lat, v.lng], {
+              radius: 4, className: "veh-marker", color: "#1e293b",
+              weight: 1, fillColor: color, fillOpacity: 0.9,
+            }).addTo(vehicleLayer);
         m.bindTooltip(tip, { sticky: true });
+        m._isBus = isBus;              // remember which kind, for the update path
         vehicleMarkers.set(v.id, m);
       } else {
         m.setLatLng([v.lat, v.lng]);
-        m.setStyle({ fillColor: color });
+        if (m._isBus) {
+          m.setIcon(busIcon(color));  // recolour the square
+        } else {
+          m.setStyle({ fillColor: color });
+        }
         m.setTooltipContent(tip);
       }
     });

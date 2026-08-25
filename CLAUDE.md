@@ -219,7 +219,8 @@ Extend `run_traci.py` to emit vehicle state as JSON over WebSocket every simulat
       "lng": 172.6362,
       "speed": 13.4,
       "lane": "edge_42_0",
-      "accel": 0.2
+      "accel": 0.2,
+      "type": "car"
     }
   ]
 }
