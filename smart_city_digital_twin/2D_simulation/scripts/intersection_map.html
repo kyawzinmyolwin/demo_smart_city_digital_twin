@@ -128,15 +128,17 @@
     <strong>Live metrics</strong>
     <div class="chart-title">Vehicles on network</div>
     <div class="chart-box"><canvas id="chart-count"></canvas></div>
-    <div class="chart-title">Average speed (m/s)</div>
+    <div class="chart-title">Average speed (km/h)</div>
     <div class="chart-box"><canvas id="chart-speed"></canvas></div>
-    <div class="chart-title">Density (veh / network km)</div>
-    <div class="chart-box"><canvas id="chart-density"></canvas></div>
+    <!-- Density (veh / network km) chart omitted for now — re-add with scenario
+         comparison (Phase 2). It needs a real networkKm (the emitter can supply it);
+         in a single fixed-network run it just mirrors the vehicle-count chart. -->
+
     <div class="hist-block">
       <strong>History (from InfluxDB)</strong>
       <div class="hist-controls">
         <select id="hist-field">
-          <option value="avgSpeed">Avg speed</option>
+          <option value="avgSpeed">Avg speed (km/h)</option>
           <option value="congestionIndex">Congestion</option>
           <option value="vehicleCount">Vehicles</option>
         </select>
@@ -822,12 +824,12 @@
 
   let chartCount = null;
   let chartSpeed = null;
-  let chartDensity = null;
+  // chartDensity omitted for now (see the HTML note) — restore when scenario
+  // comparison lands and networkKm is a real value.
 
   if (typeof Chart !== "undefined") {
     chartCount = makeChart("chart-count", "#2563eb");
     chartSpeed = makeChart("chart-speed", "#f59e0b");
-    chartDensity = makeChart("chart-density", "#7c3aed");
   }
 
   function pushPoint(chart, label, value) {
@@ -857,14 +859,11 @@
       }
     });
     const avgSpeed = n ? sum / n : 0;
-    const density = networkKm > 0 ? count / networkKm : null;
     const label = fmtClock(data.simTime);
 
     pushPoint(chartCount, label, count);
-    pushPoint(chartSpeed, label, Number(avgSpeed.toFixed(2)));
-    if (density != null) {
-      pushPoint(chartDensity, label, Number(density.toFixed(2)));
-    }
+    pushPoint(chartSpeed, label, Number((avgSpeed * 3.6).toFixed(1)));  // m/s -> km/h for display
+    // Density push omitted for now (chart removed) — restore with scenario comparison.
   }
   // -------------------------------------------------------------------------
 
@@ -902,13 +901,16 @@
   }
 
   function renderHist(field, range, pts) {
+    // Stored data is m/s (matches SUMO/InfluxDB); show avgSpeed as km/h for readers.
+    const toKmh = field === "avgSpeed";
+    const titleField = toKmh ? "avgSpeed (km/h)" : field;
     if (histChart) histChart.destroy();
     histChart = new Chart(document.getElementById("chart-hist").getContext("2d"), {
       type: "line",
       data: {
         labels: pts.map(function (p) { return new Date(p.time).toLocaleTimeString(); }),
         datasets: [{
-          data: pts.map(function (p) { return p.value; }),
+          data: pts.map(function (p) { return toKmh ? Number((p.value * 3.6).toFixed(1)) : p.value; }),
           borderColor: "#0e7c72", backgroundColor: "#0e7c72",
           borderWidth: 1.5, pointRadius: 0, tension: 0.25, fill: false,
         }],
@@ -917,7 +919,7 @@
         responsive: true, maintainAspectRatio: false, animation: false,
         plugins: {
           legend: { display: false },
-          title: { display: true, text: field + " · " + range, font: { size: 11 } },
+          title: { display: true, text: titleField + " · " + range, font: { size: 11 } },
         },
         scales: {
           x: { ticks: { maxTicksLimit: 4, font: { size: 9 } } },
