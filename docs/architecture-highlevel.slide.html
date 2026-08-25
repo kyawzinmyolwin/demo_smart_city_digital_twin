@@ -1,0 +1,111 @@
+<title>High-Level Architecture</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+  html,body{margin:0;padding:0;background:#eef2f7}
+  #slide{width:1600px;height:900px;background:#f7f9fc}
+  .disp{font-family:"Sora","Segoe UI",system-ui,sans-serif}
+  .body{font-family:"IBM Plex Sans","Segoe UI",system-ui,sans-serif}
+  .mono{font-family:"IBM Plex Mono",ui-monospace,monospace}
+</style>
+
+<div id="slide">
+<svg viewBox="0 0 1600 900" width="1600" height="900" role="img"
+     aria-label="High-level architecture: SUMO simulation streams vehicle JSON per tick over WebSocket to an AWS cloud pipeline, which writes metrics to InfluxDB Cloud and fans live ticks out to a browser dashboard.">
+  <defs>
+    <marker id="arGrey" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#8393a4"/>
+    </marker>
+    <marker id="arCyan" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#0e8fb0"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="1600" height="900" fill="#f7f9fc"/>
+
+  <!-- title block -->
+  <text x="800" y="78" text-anchor="middle" class="mono" fill="#0e8fb0"
+        font-size="17" letter-spacing="4">COMP 693 INDUSTRY PROJECT · SMART CITY DIGITAL TWIN</text>
+  <text x="800" y="134" text-anchor="middle" class="disp" fill="#14202b"
+        font-size="42" font-weight="700">System Architecture</text>
+  <text x="800" y="174" text-anchor="middle" class="body" fill="#5a6b7d"
+        font-size="20">Christchurch CBD traffic simulation → real-time cloud pipeline → live browser dashboard</text>
+
+  <!-- ============ STAGE CARDS ============  x:68/468/868/1268 w264 h200 y272 -->
+
+  <!-- 1 SIMULATE -->
+  <rect x="68" y="272" width="264" height="200" rx="16" fill="#ffffff" stroke="#4f74e0" stroke-width="2.5"/>
+  <circle cx="102" cy="318" r="7" fill="#4f74e0"/>
+  <text x="120" y="323" class="mono" fill="#4f74e0" font-size="15" letter-spacing="2">SIMULATE</text>
+  <text x="94" y="370" class="disp" fill="#14202b" font-size="27" font-weight="600">SUMO</text>
+  <text x="94" y="398" class="disp" fill="#14202b" font-size="27" font-weight="600">Simulation</text>
+  <text x="94" y="432" class="body" fill="#5a6b7d" font-size="15">Christchurch CBD network,</text>
+  <text x="94" y="452" class="body" fill="#5a6b7d" font-size="15">real Miovision demand</text>
+
+  <!-- 2 STREAM -->
+  <rect x="468" y="272" width="264" height="200" rx="16" fill="#ffffff" stroke="#d9820f" stroke-width="2.5"/>
+  <circle cx="502" cy="318" r="7" fill="#d9820f"/>
+  <text x="520" y="323" class="mono" fill="#c2760d" font-size="15" letter-spacing="2">STREAM + METRICS</text>
+  <text x="494" y="370" class="disp" fill="#14202b" font-size="27" font-weight="600">AWS Cloud</text>
+  <text x="494" y="398" class="disp" fill="#14202b" font-size="27" font-weight="600">Pipeline</text>
+  <text x="494" y="432" class="body" fill="#5a6b7d" font-size="15">Ingest + per-tick metrics</text>
+  <text x="494" y="452" class="body" fill="#5a6b7d" font-size="15">(flow, speed, congestion)</text>
+
+  <!-- 3 STORE -->
+  <rect x="868" y="272" width="264" height="200" rx="16" fill="#ffffff" stroke="#1f9d54" stroke-width="2.5"/>
+  <circle cx="902" cy="318" r="7" fill="#1f9d54"/>
+  <text x="920" y="323" class="mono" fill="#1f9d54" font-size="15" letter-spacing="2">STORE</text>
+  <text x="894" y="370" class="disp" fill="#14202b" font-size="27" font-weight="600">InfluxDB</text>
+  <text x="894" y="398" class="disp" fill="#14202b" font-size="27" font-weight="600">Cloud</text>
+  <text x="894" y="432" class="body" fill="#5a6b7d" font-size="15">Time-series metrics,</text>
+  <text x="894" y="452" class="body" fill="#5a6b7d" font-size="15">queryable by range</text>
+
+  <!-- 4 VISUALISE -->
+  <rect x="1268" y="272" width="264" height="200" rx="16" fill="#ffffff" stroke="#0e8fb0" stroke-width="2.5"/>
+  <circle cx="1302" cy="318" r="7" fill="#0e8fb0"/>
+  <text x="1320" y="323" class="mono" fill="#0e8fb0" font-size="15" letter-spacing="2">VISUALISE</text>
+  <text x="1294" y="370" class="disp" fill="#14202b" font-size="27" font-weight="600">Live</text>
+  <text x="1294" y="398" class="disp" fill="#14202b" font-size="27" font-weight="600">Dashboard</text>
+  <text x="1294" y="432" class="body" fill="#5a6b7d" font-size="15">Map + charts, live and</text>
+  <text x="1294" y="452" class="body" fill="#5a6b7d" font-size="15">historical, in the browser</text>
+
+  <!-- ============ HORIZONTAL FLOW ARROWS  mid-y 372 ============ -->
+  <line x1="338" y1="372" x2="461" y2="372" stroke="#8393a4" stroke-width="2.5" marker-end="url(#arGrey)"/>
+  <text x="400" y="359" text-anchor="middle" class="mono" fill="#5a6b7d" font-size="12.5">vehicles / tick</text>
+  <text x="400" y="396" text-anchor="middle" class="mono" fill="#8595a6" font-size="11">wss://</text>
+
+  <line x1="738" y1="372" x2="861" y2="372" stroke="#8393a4" stroke-width="2.5" marker-end="url(#arGrey)"/>
+  <text x="800" y="359" text-anchor="middle" class="mono" fill="#5a6b7d" font-size="12.5">write points</text>
+
+  <line x1="1138" y1="372" x2="1261" y2="372" stroke="#8393a4" stroke-width="2.5" marker-end="url(#arGrey)"/>
+  <text x="1200" y="359" text-anchor="middle" class="mono" fill="#5a6b7d" font-size="12.5">range query</text>
+
+  <!-- ============ LIVE FAN-OUT (real-time path) ============ -->
+  <path d="M 600 472 C 600 636, 1400 636, 1400 475" fill="none" stroke="#0e8fb0"
+        stroke-width="2.6" stroke-dasharray="8 6" marker-end="url(#arCyan)"/>
+  <rect x="806" y="610" width="388" height="30" rx="15" fill="#f7f9fc"/>
+  <text x="1000" y="630" text-anchor="middle" class="mono" fill="#0e8fb0" font-size="14">
+    live vehicle ticks — WebSocket fan-out</text>
+
+  <!-- ============ TECH TAG ROWS  y510 ============ -->
+  <text x="200" y="510" text-anchor="middle" class="mono" fill="#7b8a9a" font-size="13">TraCI · emitter.py · WGS84</text>
+  <text x="600" y="510" text-anchor="middle" class="mono" fill="#7b8a9a" font-size="13">API Gateway · Lambda ×3 · DynamoDB</text>
+  <text x="1000" y="510" text-anchor="middle" class="mono" fill="#7b8a9a" font-size="13">Secrets Manager · free tier</text>
+  <text x="1400" y="510" text-anchor="middle" class="mono" fill="#7b8a9a" font-size="13">Leaflet · Chart.js · S3 + CloudFront</text>
+
+  <!-- ============ SPEED LEGEND ============ -->
+  <circle cx="628" cy="712" r="7" fill="#e0413b"/>
+  <circle cx="700" cy="712" r="7" fill="#d98315"/>
+  <circle cx="772" cy="712" r="7" fill="#1f9d54"/>
+  <text x="792" y="717" class="mono" fill="#5a6b7d" font-size="14">
+    marker colour = vehicle speed &#160;·&#160; red &lt;3 &#160; amber 3–8 &#160; green ≥8 m/s</text>
+
+  <!-- ============ FOOTER ============ -->
+  <line x1="68" y1="806" x2="1532" y2="806" stroke="#dbe3ec" stroke-width="1.5"/>
+  <text x="68" y="840" class="mono" fill="#8595a6" font-size="14">
+    IaC: Terraform   ·   CI/CD: GitHub Actions   ·   Region: ap-southeast-2</text>
+  <text x="1532" y="840" text-anchor="end" class="mono" fill="#8595a6" font-size="14">
+    “Real-time” = pipeline latency, sim → screen</text>
+</svg>
+</div>
