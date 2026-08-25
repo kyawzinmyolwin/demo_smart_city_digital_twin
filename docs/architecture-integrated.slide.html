@@ -1,0 +1,155 @@
+<title>Integrated Architecture</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  html,body{margin:0;padding:0;background:#eef2f7}
+  #slide{width:1600px;height:900px;background:#f7f9fc}
+  .disp{font-family:"Sora","Segoe UI",system-ui,sans-serif}
+  .body{font-family:"IBM Plex Sans","Segoe UI",system-ui,sans-serif}
+  .mono{font-family:"IBM Plex Mono",ui-monospace,monospace}
+</style>
+
+<div id="slide">
+<svg viewBox="0 0 1600 900" width="1600" height="900" role="img"
+     aria-label="Integrated architecture: the build-time SUMO pipeline (data sources, Python pipeline, shared assets) is unchanged and loads the SUMO 2D engine; a new TraCI client (run_traci.py + emitter.py) reads SUMO on port 8813 and forwards vehicle JSON over WebSocket to an AWS cloud pipeline, which writes metrics to InfluxDB Cloud and drives a live browser dashboard.">
+  <defs>
+    <marker id="gEnd" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#8393a4"/></marker>
+    <marker id="cEnd" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#0e8fb0"/></marker>
+    <marker id="cStart" viewBox="0 0 10 10" refX="1.5" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto-start-reverse">
+      <path d="M10 0 L0 5 L10 10 z" fill="#0e8fb0"/></marker>
+  </defs>
+
+  <rect x="0" y="0" width="1600" height="900" fill="#f7f9fc"/>
+
+  <!-- title -->
+  <text x="800" y="58" text-anchor="middle" class="mono" fill="#0e8fb0"
+        font-size="16" letter-spacing="3.5">SMART CITY DIGITAL TWIN · INTEGRATED ARCHITECTURE</text>
+  <text x="800" y="108" text-anchor="middle" class="disp" fill="#14202b"
+        font-size="40" font-weight="700">System Architecture &amp; Data Flow</text>
+  <text x="800" y="146" text-anchor="middle" class="body" fill="#5a6b7d"
+        font-size="18">Build-time SUMO pipeline (unchanged) + the new live path — TraCI client → AWS cloud → browser dashboard</text>
+
+  <!-- ============ BAND A · BUILD-TIME ============ -->
+  <text x="60" y="192" class="mono" fill="#5f7896" font-size="13" letter-spacing="2">BUILD-TIME · OFFLINE (ONE-TIME)</text>
+
+  <!-- A1 -->
+  <rect x="60" y="206" width="440" height="124" rx="14" fill="#ffffff" stroke="#5f7896" stroke-width="2"/>
+  <circle cx="86" cy="240" r="6" fill="#5f7896"/>
+  <text x="102" y="246" class="disp" fill="#14202b" font-size="18" font-weight="600">Data Sources</text>
+  <text x="84" y="278" class="body" fill="#5a6b7d" font-size="13.5">CCC intersection counts</text>
+  <text x="84" y="298" class="body" fill="#5a6b7d" font-size="13.5">Christchurch OpenData GIS</text>
+  <text x="84" y="318" class="body" fill="#5a6b7d" font-size="13.5">Miovision turning-movement workbooks</text>
+
+  <!-- A2 -->
+  <rect x="580" y="206" width="440" height="124" rx="14" fill="#ffffff" stroke="#5f7896" stroke-width="2"/>
+  <circle cx="606" cy="240" r="6" fill="#5f7896"/>
+  <text x="622" y="246" class="disp" fill="#14202b" font-size="18" font-weight="600">Python Pipeline</text>
+  <text x="604" y="278" class="mono" fill="#5a6b7d" font-size="12.5">traffic_counts_parser.py</text>
+  <text x="604" y="298" class="mono" fill="#5a6b7d" font-size="12.5">match_intersection_opendata.py</text>
+  <text x="604" y="318" class="mono" fill="#5a6b7d" font-size="12.5">create_network · create_demand · calibrate</text>
+
+  <!-- A3 -->
+  <rect x="1100" y="206" width="440" height="124" rx="14" fill="#ffffff" stroke="#5f7896" stroke-width="2"/>
+  <circle cx="1126" cy="240" r="6" fill="#5f7896"/>
+  <text x="1142" y="246" class="disp" fill="#14202b" font-size="18" font-weight="600">Shared SUMO Assets</text>
+  <text x="1124" y="278" class="mono" fill="#5a6b7d" font-size="12.5">*.net.xml — road network</text>
+  <text x="1124" y="298" class="mono" fill="#5a6b7d" font-size="12.5">*.rou.xml — demand / routes</text>
+  <text x="1124" y="318" class="mono" fill="#5a6b7d" font-size="12.5">calibration.json — geo alignment</text>
+
+  <line x1="506" y1="268" x2="574" y2="268" stroke="#8393a4" stroke-width="2.2" marker-end="url(#gEnd)"/>
+  <text x="540" y="256" text-anchor="middle" class="mono" fill="#5a6b7d" font-size="12">raw</text>
+  <line x1="1026" y1="268" x2="1094" y2="268" stroke="#8393a4" stroke-width="2.2" marker-end="url(#gEnd)"/>
+  <text x="1060" y="256" text-anchor="middle" class="mono" fill="#5a6b7d" font-size="12">generate</text>
+
+  <!-- loads connector: A3 -> SUMO 2D (B1) -->
+  <path d="M 1320 330 L 1320 362 L 210 362 L 210 398" fill="none" stroke="#8393a4"
+        stroke-width="2.2" marker-end="url(#gEnd)"/>
+  <rect x="628" y="351" width="256" height="22" rx="11" fill="#f7f9fc"/>
+  <text x="756" y="367" text-anchor="middle" class="mono" fill="#5a6b7d" font-size="12.5">loads · .net.xml + .rou.xml</text>
+
+  <!-- ============ BAND B · LIVE RUNTIME ============ -->
+  <!-- B1 SUMO 2D Engine (amber, existing) -->
+  <rect x="60" y="400" width="300" height="158" rx="15" fill="#ffffff" stroke="#d9820f" stroke-width="2.5"/>
+  <circle cx="88" cy="434" r="7" fill="#d9820f"/>
+  <text x="104" y="439" class="mono" fill="#c2760d" font-size="13" letter-spacing="1.2">SIMULATION CORE</text>
+  <text x="86" y="472" class="disp" fill="#14202b" font-size="20" font-weight="600">SUMO 2D Engine</text>
+  <text x="86" y="500" class="mono" fill="#5a6b7d" font-size="12.5">…main_streets.sumocfg</text>
+  <text x="86" y="521" class="mono" fill="#5a6b7d" font-size="12.5">--remote-port 8813</text>
+  <text x="86" y="542" class="mono" fill="#5a6b7d" font-size="12.5">06:30–24:00 · 1 s steps</text>
+
+  <!-- B2 emitter (cyan, NEW) -->
+  <rect x="453" y="400" width="300" height="158" rx="15" fill="#ffffff" stroke="#0e8fb0" stroke-width="2.5"/>
+  <circle cx="481" cy="434" r="7" fill="#0e8fb0"/>
+  <text x="497" y="439" class="mono" fill="#0e8fb0" font-size="13" letter-spacing="1.2">TRACI CLIENT</text>
+  <rect x="689" y="414" width="50" height="21" rx="10.5" fill="#d8f3fa" stroke="#0e8fb0" stroke-width="1"/>
+  <text x="714" y="429" text-anchor="middle" class="mono" fill="#0b7f9c" font-size="11" font-weight="500">NEW</text>
+  <text x="479" y="472" class="disp" fill="#14202b" font-size="19" font-weight="600">run_traci.py + emitter</text>
+  <text x="479" y="500" class="mono" fill="#5a6b7d" font-size="12.5">reads SUMO on :8813</text>
+  <text x="479" y="521" class="mono" fill="#5a6b7d" font-size="12.5">serialize_vehicles() → JSON</text>
+  <text x="479" y="542" class="mono" fill="#5a6b7d" font-size="12.5">XY→WGS84 · CloudForwarder</text>
+
+  <!-- B3 AWS pipeline (cyan, NEW) -->
+  <rect x="846" y="400" width="300" height="158" rx="15" fill="#ffffff" stroke="#0e8fb0" stroke-width="2.5"/>
+  <circle cx="874" cy="434" r="7" fill="#0e8fb0"/>
+  <text x="890" y="439" class="mono" fill="#0e8fb0" font-size="13" letter-spacing="1.2">AWS CLOUD PIPELINE</text>
+  <rect x="1082" y="414" width="50" height="21" rx="10.5" fill="#d8f3fa" stroke="#0e8fb0" stroke-width="1"/>
+  <text x="1107" y="429" text-anchor="middle" class="mono" fill="#0b7f9c" font-size="11" font-weight="500">NEW</text>
+  <text x="872" y="472" class="disp" fill="#14202b" font-size="20" font-weight="600">API Gateway + Lambda</text>
+  <text x="872" y="500" class="mono" fill="#5a6b7d" font-size="12.5">WebSocket API · DynamoDB</text>
+  <text x="872" y="521" class="mono" fill="#5a6b7d" font-size="12.5">ingest · metrics · replay</text>
+  <text x="872" y="542" class="mono" fill="#5a6b7d" font-size="12.5">compute_tick_metrics()</text>
+
+  <!-- B4 dashboard (cyan, NEW) -->
+  <rect x="1239" y="400" width="300" height="158" rx="15" fill="#ffffff" stroke="#0e8fb0" stroke-width="2.5"/>
+  <circle cx="1267" cy="434" r="7" fill="#0e8fb0"/>
+  <text x="1283" y="439" class="mono" fill="#0e8fb0" font-size="13" letter-spacing="1.2">LIVE DASHBOARD</text>
+  <rect x="1475" y="414" width="50" height="21" rx="10.5" fill="#d8f3fa" stroke="#0e8fb0" stroke-width="1"/>
+  <text x="1500" y="429" text-anchor="middle" class="mono" fill="#0b7f9c" font-size="11" font-weight="500">NEW</text>
+  <text x="1265" y="472" class="disp" fill="#14202b" font-size="20" font-weight="600">Browser (Leaflet)</text>
+  <text x="1265" y="500" class="mono" fill="#5a6b7d" font-size="12.5">speed-coloured markers</text>
+  <text x="1265" y="521" class="mono" fill="#5a6b7d" font-size="12.5">3 Chart.js panels</text>
+  <text x="1265" y="542" class="mono" fill="#5a6b7d" font-size="12.5">S3 + CloudFront</text>
+
+  <!-- band B arrows (live = cyan) -->
+  <line x1="366" y1="479" x2="447" y2="479" stroke="#0e8fb0" stroke-width="2.6"
+        marker-start="url(#cStart)" marker-end="url(#cEnd)"/>
+  <text x="406" y="467" text-anchor="middle" class="mono" fill="#0e8fb0" font-size="12">TraCI :8813</text>
+
+  <line x1="759" y1="479" x2="840" y2="479" stroke="#0e8fb0" stroke-width="2.6" marker-end="url(#cEnd)"/>
+  <text x="799" y="467" text-anchor="middle" class="mono" fill="#0e8fb0" font-size="12">wss://</text>
+
+  <line x1="1152" y1="479" x2="1233" y2="479" stroke="#0e8fb0" stroke-width="2.6" marker-end="url(#cEnd)"/>
+  <text x="1192" y="467" text-anchor="middle" class="mono" fill="#0e8fb0" font-size="11.5">live ticks</text>
+
+  <!-- ============ InfluxDB Cloud (below B3) ============ -->
+  <rect x="846" y="628" width="300" height="104" rx="15" fill="#ffffff" stroke="#0e8fb0" stroke-width="2.5"/>
+  <circle cx="874" cy="660" r="7" fill="#0e8fb0"/>
+  <text x="890" y="665" class="mono" fill="#0e8fb0" font-size="13" letter-spacing="1.2">TIME-SERIES STORE</text>
+  <rect x="1082" y="640" width="50" height="21" rx="10.5" fill="#d8f3fa" stroke="#0e8fb0" stroke-width="1"/>
+  <text x="1107" y="655" text-anchor="middle" class="mono" fill="#0b7f9c" font-size="11" font-weight="500">NEW</text>
+  <text x="872" y="698" class="disp" fill="#14202b" font-size="20" font-weight="600">InfluxDB Cloud</text>
+  <text x="872" y="721" class="mono" fill="#5a6b7d" font-size="12.5">tick metrics · Flux range queries</text>
+
+  <!-- write down -->
+  <line x1="996" y1="558" x2="996" y2="622" stroke="#0e8fb0" stroke-width="2.6" marker-end="url(#cEnd)"/>
+  <text x="1010" y="596" class="mono" fill="#0e8fb0" font-size="12">write points</text>
+
+  <!-- history: InfluxDB -> dashboard (dashed) -->
+  <path d="M 1146 680 L 1389 680 L 1389 564" fill="none" stroke="#0e8fb0" stroke-width="2.4"
+        stroke-dasharray="8 6" marker-end="url(#cEnd)"/>
+  <text x="1267" y="704" text-anchor="middle" class="mono" fill="#0e8fb0" font-size="12">history · replay query</text>
+
+  <!-- ============ LEGEND ============ -->
+  <line x1="60" y1="782" x2="1540" y2="782" stroke="#dbe3ec" stroke-width="1.5"/>
+  <circle cx="66" cy="820" r="7" fill="#5f7896"/>
+  <text x="82" y="825" class="body" fill="#5a6b7d" font-size="14.5">Build-time pipeline (offline, unchanged)</text>
+  <circle cx="470" cy="820" r="7" fill="#d9820f"/>
+  <text x="486" y="825" class="body" fill="#5a6b7d" font-size="14.5">SUMO simulation core (existing)</text>
+  <circle cx="812" cy="820" r="7" fill="#0e8fb0"/>
+  <text x="828" y="825" class="body" fill="#5a6b7d" font-size="14.5">New — emitter → cloud → dashboard</text>
+  <text x="1540" y="825" text-anchor="end" class="mono" fill="#8595a6" font-size="13">◀▶ live TraCI link · ⇠ dashed = on-demand query</text>
+</svg>
+</div>
