@@ -35,3 +35,13 @@ output "dashboard_url" {
   description = "CloudFront URL serving the dashboard over HTTPS."
   value       = "https://${aws_cloudfront_distribution.dashboard.domain_name}"
 }
+
+output "sim_host_instance_id" {
+  description = "SUMO producer instance id (for: aws ssm start-session --target <id>). Null when disabled."
+  value       = try(aws_instance.sim_host[0].id, null)
+}
+
+output "sim_host_public_ip" {
+  description = "SUMO producer public IP (informational; access is via SSM)."
+  value       = try(aws_instance.sim_host[0].public_ip, null)
+}

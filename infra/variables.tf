@@ -71,3 +71,16 @@ variable "influxdb_retention_seconds" {
   type        = number
   default     = 2592000
 }
+
+variable "sim_host_enabled" {
+  description = "Create the on-demand EC2 SUMO producer. Keep false normally; set true only for a demo."
+  type        = bool
+  default     = false
+
+}
+
+variable "sim_host_instance_type" {
+  description = "EC2 instance type for the on-demand SUMO producer. Keep small for a demo."
+  type        = string
+  default     = "t3.medium"
+}

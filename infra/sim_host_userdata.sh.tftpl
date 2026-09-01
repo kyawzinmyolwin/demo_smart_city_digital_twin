@@ -1,0 +1,36 @@
+# SUMO via the official PPA (fast, recent)
+apt-get update
+apt-get install -y software-properties-common git python3-venv
+add-apt-repository -y ppa:sumo/stable
+apt-get update
+apt-get install -y sumo sumo-tools
+
+# Get the code (public repo)
+cd /opt
+git clone https://github.com/kyawzinmyolwin/demo_smart_city_digital_twin.git
+cd demo_smart_city_digital_twin/smart_city_digital_twin
+
+# Python venv + deps
+python3 -m venv .venv
+./.venv/bin/pip install -r 2D_simulation/requirements.txt
+
+# Run the emitter as a service, forwarding to the cloud API Gateway
+cat > /etc/systemd/system/sumo-emitter.service <<UNIT
+[Unit]
+Description=SUMO producer -> API Gateway
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Environment=SUMO_HOME=/usr/share/sumo
+WorkingDirectory=/opt/demo_smart_city_digital_twin/smart_city_digital_twin/2D_simulation
+ExecStart=/opt/demo_smart_city_digital_twin/smart_city_digital_twin/.venv/bin/python scripts/run_traci.py --no-gui --emit-interval 10 --emit-target "${ws_url}"
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+
+systemctl daemon-reload
+systemctl enable --now sumo-emitter.service
