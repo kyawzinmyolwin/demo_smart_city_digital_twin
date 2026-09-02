@@ -79,8 +79,15 @@ Project context for Claude Code. Read this before touching any file.
   (default `http://localhost:8788/metrics`). Verified: browser → replay_server → local InfluxDB → chart.
 - **Deployed dashboard fix**: intersection_map.html had a fatal duplicate-chart-block from a bad
   merge (two `let paused`/`const MAX_POINTS` → SyntaxError killed the whole page). Removed the
-  stale block. NOTE: the broken version still lives on other branches — re-merging them re-breaks
-  main (has happened via PRs #15–18). Fix the source branches or the dashboard keeps dying.
+  stale block. The branches that carried the broken version (phase1-websocket-emitter,
+  phase2-cloud-pipeline, docs/add-tutorial) have since been **deleted**, so the recurring
+  re-breakage root cause is resolved; main is the source of truth.
+- **On-demand cloud sim host DONE & verified.** `infra/sim_host.tf` — an EC2 box gated by
+  `var.sim_host_enabled` (default false → no cost) that installs SUMO (PPA), clones the repo, and
+  runs the emitter as a `sumo-emitter` systemd service forwarding to `wss://…/prod`. Access via
+  SSM (no open ports). `terraform apply -var 'sim_host_enabled=true'` to demo; `=false` to tear
+  down. Runs the whole producer in AWS — no laptop needed. See running_guide.md §E.
+  Gotcha: user_data must start with `#!` or cloud-init skips it (hit this once).
 
 **Next**
 - Replay **public-URL access** (403): the Lambda Function URL denies anonymous access on this

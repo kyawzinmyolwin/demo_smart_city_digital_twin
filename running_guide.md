@@ -131,6 +131,57 @@ Vehicles appear in the browser, and metrics land in **InfluxDB Cloud**.
 
 ---
 
+## E. Cloud sim host — run SUMO in AWS, on demand (no laptop)
+
+Runs the whole producer in the cloud: an EC2 box runs SUMO + the emitter, forwarding to your
+API Gateway. Nothing runs on your machine. It's **on-demand and hourly-billed**, so you bring it
+up for a demo and tear it down after. Defined in `infra/sim_host.tf`, gated by
+`var.sim_host_enabled` (default `false` → no cost).
+
+**Prereqs (in the VM):** the AWS **Session Manager plugin** (for shell access):
+```bash
+curl "https://s3.amazonaws.com/session-manager-downloads/plugin/latest/ubuntu_64bit/session-manager-plugin.deb" -o session-manager-plugin.deb
+sudo dpkg -i session-manager-plugin.deb
+```
+
+**1. Bring it up** (from `infra/`):
+```bash
+terraform apply -var 'sim_host_enabled=true'
+```
+Creates an EC2 instance whose boot script (user_data) installs SUMO (PPA), clones the repo, and
+starts a `sumo-emitter` systemd service forwarding to `wss://…/prod`. First boot takes ~3–5 min.
+
+**2. Verify** (a few minutes after apply):
+```bash
+aws ssm start-session --target "$(terraform output -raw sim_host_instance_id)"   # from the VM
+# then inside the box:
+sudo cloud-init status --wait          # want: status: done  (not "degraded"/"error")
+systemctl is-active sumo-emitter       # want: active
+sudo journalctl -u sumo-emitter -n 20 --no-pager   # want: "Running simulation ..."
+```
+Provisioning log (for failures): `sudo cat /var/log/cloud-init-output.log`.
+
+**3. Watch it live:** open the dashboard, set the WS field to your `wss://…/prod`, Connect.
+
+**4. Tear it down when done** (this is the billed piece — always do this):
+```bash
+terraform apply -var 'sim_host_enabled=false'   # removes just the sim host
+#   or:  terraform destroy                       # everything
+```
+
+**Gotchas we hit (so you don't again):**
+- `terraform plan` shows nothing unless you pass `-var 'sim_host_enabled=true'` — the resources
+  are `count`-gated on that flag (default false). This is intentional (on-demand cost control).
+- The `user_data` script **must start with `#!/usr/bin/env bash`** on line 1, or cloud-init
+  classifies it as a plain comment and silently skips it (symptoms: no `sumo-emitter` service,
+  empty `cloud-init-output.log`, `cloud-init status` = degraded).
+- Editing the script + re-applying **replaces the instance** (`user_data_replace_on_change = true`),
+  giving a new instance id — SSM into the new one.
+- Access is via **SSM**, not SSH (no inbound ports). Run `aws ssm start-session` from the VM, not
+  the EC2.
+
+---
+
 ## `--emit` vs `--emit-target`
 
 | Flag | Does | View via |
@@ -159,6 +210,9 @@ Vehicles appear in the browser, and metrics land in **InfluxDB Cloud**.
 # Ctrl-C the emitter / writer / servers in their terminals
 docker compose stop      # pause local InfluxDB (data kept)
 colima stop              # shut the Docker VM
-# Cloud: from infra/  →  terraform destroy   (set recovery_window_in_days = 0 in storage.tf
-#                        first, or the Secrets Manager 7-day window blocks the next apply)
+# Cloud sim host (the hourly-billed piece) — always tear down after a demo:
+#   from infra/  →  terraform apply -var 'sim_host_enabled=false'
+# Cloud everything:
+#   from infra/  →  terraform destroy   (set recovery_window_in_days = 0 in storage.tf
+#                   first, or the Secrets Manager 7-day window blocks the next apply)
 ```
