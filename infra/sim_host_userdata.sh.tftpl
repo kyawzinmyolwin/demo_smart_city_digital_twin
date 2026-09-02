@@ -1,3 +1,7 @@
+#!/usr/bin/env bash
+set -euxo pipefail
+export DEBIAN_FRONTEND=noninteractive
+
 # SUMO via the official PPA (fast, recent)
 apt-get update
 apt-get install -y software-properties-common git python3-venv
