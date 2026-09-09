@@ -137,6 +137,12 @@ async def _run_emitting(traci, args) -> None:
         print(f"Forwarding snapshots to {args.emit_target}")
 
     step = 0
+    # Real-time pacing: anchor wall-clock to sim time so playback tracks the clock
+    # (or a --speed multiple of it) instead of running flat out. A light scenario
+    # (few vehicles) otherwise finishes in a second; this makes it watchable.
+    speed = args.speed if args.speed and args.speed > 0 else 1.0
+    sim_start = traci.simulation.getTime()
+    wall_start = time.monotonic()
     try:
         print("Running simulation ...")
         while not _should_stop(traci, args):
@@ -154,7 +160,13 @@ async def _run_emitting(traci, args) -> None:
                     await forwarder.send(snapshot)
             if int(t) % 60 == 0:
                 _print_status(traci)
-            await asyncio.sleep(0)  # yield to the WebSocket server / forwarder
+            # Pace to wall-clock when asked; otherwise just yield to the event loop
+            # so the WebSocket server / forwarder can make progress.
+            lag = 0.0
+            if args.real_time:
+                sim_elapsed = traci.simulation.getTime() - sim_start
+                lag = (sim_elapsed / speed) - (time.monotonic() - wall_start)
+            await asyncio.sleep(lag if lag > 0 else 0)
     finally:
         if server is not None:
             server.close()
@@ -207,6 +219,19 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="PATH",
         help="Override the SUMO config to launch (launch mode only; ignored with "
         "--connect). Use e.g. scenarios/low_traffic.sumocfg for a small test run.",
+    )
+    p.add_argument(
+        "--real-time",
+        action="store_true",
+        help="Pace the emitting loop to wall-clock time so a light scenario is "
+        "watchable (otherwise it runs as fast as possible). Emit mode only.",
+    )
+    p.add_argument(
+        "--speed",
+        type=float,
+        default=1.0,
+        metavar="X",
+        help="Playback multiplier for --real-time (2 = twice real time; default: 1).",
     )
     # --- live emitter (Phase 1) ---
     p.add_argument(

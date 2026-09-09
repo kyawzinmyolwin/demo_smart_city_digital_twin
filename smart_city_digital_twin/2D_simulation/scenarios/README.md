@@ -47,4 +47,26 @@ python scripts/run_traci.py --connect --emit
 ```
 
 The 8 vehicles appear at the 06:30 jump and run until their routes finish, so the
-sim goes idle and the loop stops on its own — a short, deterministic run.
+sim goes idle and the loop stops on its own — a short, deterministic run. Because
+the load is tiny, the emit loop runs flat out and this finishes in ~a second of
+wall-clock. It's ideal for a quick/CI check, not for watching live — for that use
+the flow scenario below with `--real-time`.
+
+## low_traffic_flow — a steady few, for a few minutes
+
+`low_traffic_flow.sumocfg` + `low_traffic_flow.rou.xml`: instead of one batch,
+three `<flow>`s inject a steady trickle (~4–6 vehicles at a time) along 3 real
+routes for 6 min of sim time (06:30–06:36). The network stays populated, so the
+dashboard keeps showing movement instead of draining after the first batch.
+
+Pair it with **real-time pacing** so playback tracks the wall clock (a light
+scenario otherwise flies past in a second):
+
+```bash
+python scripts/run_traci.py --sumocfg scenarios/low_traffic_flow.sumocfg \
+    --no-gui --emit --real-time
+```
+
+That runs for ~6 minutes of real time. `--speed 2` plays at twice real time (~3
+min); `--speed 0.5` at half. Stop early any time with Ctrl-C. `--real-time` only
+affects emit mode and is off by default, so nothing else changes.
