@@ -201,6 +201,13 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--end", type=float, default=None, help="Stop at this sim time (default: run until idle)")
     p.add_argument("--gui", action="store_true", default=True, help="Use sumo-gui (default)")
     p.add_argument("--no-gui", action="store_false", dest="gui", help="Use headless sumo instead")
+    p.add_argument(
+        "--sumocfg",
+        default=None,
+        metavar="PATH",
+        help="Override the SUMO config to launch (launch mode only; ignored with "
+        "--connect). Use e.g. scenarios/low_traffic.sumocfg for a small test run.",
+    )
     # --- live emitter (Phase 1) ---
     p.add_argument(
         "--emit",
@@ -269,7 +276,7 @@ def main() -> int:
         cmd = [
             binary,
             "-c",
-            str(SUMOCFG),
+            str(args.sumocfg) if args.sumocfg else str(SUMOCFG),
             "-b",
             str(args.begin),
             "--step-length",
