@@ -3,6 +3,44 @@
 Small, self-contained SUMO scenarios for exercising the emitter → dashboard →
 cloud pipeline without the full ~92,000-vehicle demand.
 
+Two kinds live here:
+- **Light test runs** (`low_traffic`, `low_traffic_flow`) — a handful of vehicles
+  for quickly checking the pipeline / watching the dashboard.
+- **Demand variants** (`morning_peak`, `offpeak`) — realistic slices of the real
+  demand at different times of day, for the scenario-comparison feature.
+
+## Demand variants — morning peak vs off-peak
+
+Real vehicles from the demand, filtered to a time-of-day window (routes copied
+verbatim, valid by construction). They contrast traffic levels for scenario
+comparison:
+
+| Scenario | Window | Vehicles | Config |
+|----------|--------|----------|--------|
+| Morning peak | 08:00–08:30 | ~6,200 | `morning_peak.sumocfg` |
+| Off-peak (midday) | 11:00–11:30 | ~3,200 | `offpeak.sumocfg` |
+
+Run each with a `--jump-to` matching its window start, so real-time playback
+starts at the window (otherwise the emit loop idles from the default 06:30 jump).
+Tag each run with a distinct `--sim-id` so downstream (InfluxDB / dashboard) can
+tell them apart:
+
+```bash
+# Morning peak (08:00 start), sped up 10x so 30 min of sim plays in ~3 min:
+python scripts/run_traci.py --sumocfg scenarios/morning_peak.sumocfg \
+    --no-gui --emit --real-time --speed 10 --jump-to 28800 --sim-id am-peak
+
+# Off-peak (11:00 start):
+python scripts/run_traci.py --sumocfg scenarios/offpeak.sumocfg \
+    --no-gui --emit --real-time --speed 10 --jump-to 39600 --sim-id offpeak
+```
+
+> **Note on picking a *date*:** you can select the time of day (above), but not a
+> calendar date. The demand is a single *representative weekday* composited from
+> Miovision counts that were surveyed across 45 different dates (2018–2025), each
+> covering only a handful of the 93 intersections — so no single past date has
+> network-wide coverage to reconstruct. See `IMPLEMENTATION.md` §"Selecting a date".
+
 ## low_traffic — 8 vehicles
 
 `low_traffic.sumocfg` + `low_traffic.rou.xml`: the same real Christchurch network,

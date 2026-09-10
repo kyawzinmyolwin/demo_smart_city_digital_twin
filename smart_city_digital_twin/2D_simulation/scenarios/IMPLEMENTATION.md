@@ -85,6 +85,8 @@ light scenario, neither a bug:
 | `scenarios/low_traffic.sumocfg` | New | Config: real net + the 8-vehicle demand, short window. |
 | `scenarios/low_traffic_flow.rou.xml` | New (generated) | 3 flows → steady ~4–6 vehicles for 6 min sim time. Watchable run. |
 | `scenarios/low_traffic_flow.sumocfg` | New | Config for the flow demand. |
+| `scenarios/morning_peak.{sumocfg,rou.xml}` | New (generated) | ~6,200 real vehicles, 08:00–08:30 AM peak. Demand variant. |
+| `scenarios/offpeak.{sumocfg,rou.xml}` | New (generated) | ~3,200 real vehicles, 11:00–11:30 midday. Demand variant. |
 | `scenarios/README.md` | New | User-facing how-to-run. |
 | `scenarios/IMPLEMENTATION.md` | New | This document. |
 
@@ -265,6 +267,55 @@ No new imports were needed — `time` and `asyncio` were already imported at the
 the module.
 
 ---
+
+### 3.7 Demand variants — morning peak vs off-peak
+
+Same extraction technique as §3.1, but filtered by *departure time* instead of
+count, to produce realistic slices for scenario comparison. The generator streams
+the routed demand and keeps vehicles whose `depart` falls in `[start, end)`:
+
+```python
+for _, el in ET.iterparse(src, events=("end",)):
+    if el.tag == "vehicle":
+        d = float(el.get("depart"))
+        if start <= d < end:                 # keep only this window's vehicles
+            out.append("    " + ET.tostring(el, encoding="unicode").strip())
+        if d >= end:                         # depart-ordered file: stop past the window
+            el.clear(); break
+        el.clear()
+```
+
+Windows were chosen from the demand's actual hourly histogram:
+
+| Scenario | Window | Vehicles | Rationale |
+|----------|--------|----------|-----------|
+| `morning_peak` | 08:00–08:30 (28800–30600) | ~6,200 | Busiest AM hour (07–09 carries ~12k/hr). |
+| `offpeak` | 11:00–11:30 (39600–41400) | ~3,200 | Midday inter-peak, ~half the peak — clean contrast. |
+
+Each `.sumocfg` sets `begin`/`end` to its window and points at its filtered route
+file. Because `run_traci.py` fast-forwards to `--jump-to` (default 06:30) *before*
+the real-time-paced emit loop, each variant must be run with a `--jump-to` matching
+its window start — otherwise the emit loop would idle in real time from 06:30 to the
+window. The README documents the exact commands, including a distinct `--sim-id` per
+variant so InfluxDB/dashboard can keep the two runs apart (this is the data backing
+the scenario-comparison extension feature).
+
+## Selecting a date
+
+A recurring question: can we run "a particular date"? Findings from the source
+data (`data/output/demand/traffic_18MAY2026_130842.csv`):
+
+- **Time of day: yes** — via `--jump-to` / `--end`, or the demand variants above.
+- **Calendar date (current or past): no.** The simulation has no date axis (it runs
+  seconds-of-day, 0–86400), and the counts can't reconstruct one: the file holds
+  **45 distinct `survey_date`s spanning 2018–2025**, and each date covers only a
+  handful of the **93 intersections** (Miovision surveys one intersection at a time).
+  So no single calendar date has network-wide coverage. The committed demand is a
+  *representative weekday* composited from all of them onto a common time-of-day.
+- A `--survey-date` filter on the demand builder is technically feasible (the parser
+  already reads `survey_date`/`date_time`) but would yield a near-empty network for
+  any one date — not worth it. The meaningful axis is **scenario/time-of-day**, not
+  calendar date, consistent with the project's "historical data, not live" decision.
 
 ## 4. Testing / verification
 
