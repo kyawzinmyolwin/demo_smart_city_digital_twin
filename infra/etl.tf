@@ -106,11 +106,13 @@ resource "aws_lambda_function" "etl_ingest" {
   timeout          = 300
   memory_size      = 512
 
-  # Singleton: the ingest reads-modifies-writes one S3 manifest, so overlapping
-  # runs would race on it. Cap to one concurrent execution — extra invocations
-  # (retries, or a schedule firing during a manual backfill) are throttled, not
-  # run in parallel.
-  reserved_concurrent_executions = 1
+  # NOTE: the ingest reads-modifies-writes one S3 manifest, so overlapping runs
+  # race on it. The natural guard is reserved_concurrent_executions = 1, but that
+  # requires the account's unreserved concurrency pool to stay >= 10, which a
+  # low-limit account (total quota 10) can't satisfy — so it's intentionally NOT
+  # set here. Instead, invoke sequentially and without CLI retries
+  # (--cli-read-timeout 360, AWS_MAX_ATTEMPTS=1); the weekly schedule makes an
+  # accidental overlap unlikely, and the manifest converges if one occurs.
 
   environment {
     variables = {
