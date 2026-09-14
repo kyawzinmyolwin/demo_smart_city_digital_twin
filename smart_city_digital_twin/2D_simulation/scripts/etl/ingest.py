@@ -22,7 +22,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Protocol
 
-from etl.counts_etl import clean_workbook, to_json_bytes
+from etl.counts_etl import clean_workbook, group_by_intersection_date
 from etl.drive_client import (
     download as drive_download,
     merge_manifest,
@@ -61,6 +61,20 @@ class IngestSummary:
 
 def _folder_seg(folder: str) -> str:
     return folder or "root"
+
+
+def _processed_key(prefix: str, iid: str, date: str, workbook: str) -> str:
+    """Query-friendly key: processed-traffic-data/<intersection>/<date>.json.
+
+    Falls back to placeholders when a group lacks an id/date, appending the source
+    workbook name in that case so distinct sources can't collide into one key.
+    """
+    if iid and date:
+        return f"{prefix}/{iid}/{date}.json"
+    iid = iid or "unknown-intersection"
+    date = date or "unknown-date"
+    stem = workbook.rsplit(".", 1)[0].replace("/", "_")
+    return f"{prefix}/{iid}/{date}__{stem}.json"
 
 
 def run_ingest(
@@ -115,10 +129,19 @@ def run_ingest(
                 "modifiedTime": f.modified_time,
             }
             if result.ok:
-                store.put_bytes(
-                    f"{processed_prefix}/{seg}/{f.name}.json",
-                    to_json_bytes(result, source=source),
-                )
+                # Store one query-friendly object per (intersection, date) group,
+                # keyed so the query Lambda can fetch/prefix-list without scanning.
+                for (iid, date), rows in group_by_intersection_date(result.rows).items():
+                    store.put_json(
+                        _processed_key(processed_prefix, iid, date, f.name),
+                        {
+                            "source": source,
+                            "intersection": iid,
+                            "date": date,
+                            "rowCount": len(rows),
+                            "rows": rows,
+                        },
+                    )
                 summary.processed += 1
             else:
                 store.put_json(

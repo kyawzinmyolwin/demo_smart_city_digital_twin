@@ -14,7 +14,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from etl.counts_etl import clean_workbook, to_json_bytes  # noqa: E402
+from etl.counts_etl import clean_workbook, group_by_intersection_date, to_json_bytes  # noqa: E402
 
 
 def _rows_parser(rows):
@@ -67,6 +67,19 @@ def test_to_json_bytes_roundtrips_with_source():
     assert payload["rowCount"] == 1
     assert payload["rows"] == rows
     assert payload["source"]["driveId"] == "abc"
+
+
+def test_group_by_intersection_date():
+    rows = [
+        {"intersection_id": "I1", "survey_date": "2020-01-01", "v": 1},
+        {"intersection_id": "I1", "survey_date": "2020-01-01", "v": 2},
+        {"intersection_id": "I2", "survey_date": "2021-05-05", "v": 3},
+        {"totals": 9},  # missing id/date -> ("","") group, not dropped
+    ]
+    groups = group_by_intersection_date(rows)
+    assert len(groups[("I1", "2020-01-01")]) == 2
+    assert groups[("I2", "2021-05-05")] == [{"intersection_id": "I2", "survey_date": "2021-05-05", "v": 3}]
+    assert ("", "") in groups
 
 
 if __name__ == "__main__":

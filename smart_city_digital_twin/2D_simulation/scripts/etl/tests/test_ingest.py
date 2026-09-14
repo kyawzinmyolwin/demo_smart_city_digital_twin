@@ -71,8 +71,8 @@ def test_full_pass_processes_and_rejects_and_writes_manifest():
         _file("c", "pedestrian.xlsx"),
     ]
     clean = _fake_clean({
-        "good1.xlsx": ("ok", [{"intersection_id": "I1", "totals": 5}]),
-        "good2.xlsx": ("ok", [{"intersection_id": "I2", "totals": 9}]),
+        "good1.xlsx": ("ok", [{"intersection_id": "I1", "survey_date": "2020-02-17", "totals": 5}]),
+        "good2.xlsx": ("ok", [{"intersection_id": "I2", "survey_date": "2019-03-01", "totals": 9}]),
         "pedestrian.xlsx": ("reject", "Expected at least one Miovision metric sheet"),
     })
     store = MemStore()
@@ -80,10 +80,12 @@ def test_full_pass_processes_and_rejects_and_writes_manifest():
                    walk=_fake_walk(files), download=_fake_download(), clean=clean)
 
     assert (s.scanned, s.selected, s.processed, s.rejected, s.errors) == (3, 3, 2, 1, 0)
-    # raw stored for all 3; processed for the 2 good; rejected doc for the 1 bad
-    assert len(store.blobs) == 3 + 2                      # 3 raw + 2 processed json
+    # raw (put_bytes) for all 3; processed + rejected + manifest are JSON docs
+    assert len(store.blobs) == 3
     assert "raw-traffic-data/2026 Intersection/good1.xlsx" in store.blobs
-    assert "processed-traffic-data/2026 Intersection/good2.xlsx.json" in store.blobs
+    # processed objects keyed by intersection/date (query-friendly)
+    assert store.docs["processed-traffic-data/I1/2020-02-17.json"]["rowCount"] == 1
+    assert "processed-traffic-data/I2/2019-03-01.json" in store.docs
     assert "rejected-traffic-data/2026 Intersection/pedestrian.xlsx.json" in store.docs
     # manifest records all 3 handled files
     assert set(store.docs[MANIFEST_KEY]) == {"a", "b", "c"}

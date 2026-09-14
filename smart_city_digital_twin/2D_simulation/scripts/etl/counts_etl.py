@@ -85,6 +85,26 @@ def clean_workbook(
     return CleanResult(path=str(p), status="ok", rows=rows, row_count=len(rows))
 
 
+# Row fields the parser emits (see the CSV header in traffic_counts_parser.py) that
+# the query endpoint keys on. Kept as constants so the layout has one source of truth.
+INTERSECTION_FIELD = "intersection_id"
+DATE_FIELD = "survey_date"
+
+
+def group_by_intersection_date(
+    rows: list[dict[str, Any]],
+) -> dict[tuple[str, str], list[dict[str, Any]]]:
+    """Group rows by (intersection_id, survey_date) so each group can be stored
+    under a query-friendly key. Missing values become "" — the caller decides the
+    fallback key so nothing is silently dropped."""
+    groups: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    for r in rows:
+        iid = str(r.get(INTERSECTION_FIELD, "") or "")
+        date = str(r.get(DATE_FIELD, "") or "")
+        groups.setdefault((iid, date), []).append(r)
+    return groups
+
+
 def to_processed_payload(result: CleanResult, *, source: dict[str, Any] | None = None) -> dict[str, Any]:
     """Shape an OK result into the processed-data document written to S3."""
     return {

@@ -39,3 +39,17 @@ class S3ObjectStore:
         self.put_bytes(
             key, json.dumps(obj, separators=(",", ":"), default=str).encode("utf-8")
         )
+
+    def list_keys(self, prefix: str) -> list[str]:
+        """All object keys under ``prefix`` (paginated)."""
+        keys: list[str] = []
+        token: str | None = None
+        while True:
+            kwargs = {"Bucket": self.bucket, "Prefix": prefix}
+            if token:
+                kwargs["ContinuationToken"] = token
+            resp = self._s3.list_objects_v2(**kwargs)
+            keys.extend(item["Key"] for item in resp.get("Contents", []))
+            if not resp.get("IsTruncated"):
+                return keys
+            token = resp.get("NextContinuationToken")
