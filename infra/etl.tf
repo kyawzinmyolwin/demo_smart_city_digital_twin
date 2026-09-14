@@ -106,6 +106,12 @@ resource "aws_lambda_function" "etl_ingest" {
   timeout          = 300
   memory_size      = 512
 
+  # Singleton: the ingest reads-modifies-writes one S3 manifest, so overlapping
+  # runs would race on it. Cap to one concurrent execution — extra invocations
+  # (retries, or a schedule firing during a manual backfill) are throttled, not
+  # run in parallel.
+  reserved_concurrent_executions = 1
+
   environment {
     variables = {
       DATA_BUCKET                   = aws_s3_bucket.etl_data.id
