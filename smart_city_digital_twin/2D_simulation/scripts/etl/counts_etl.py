@@ -22,6 +22,7 @@ Design notes:
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
@@ -43,7 +44,13 @@ class CleanResult:
 
 
 def _load_parser() -> Callable[..., list[dict[str, Any]]]:
-    """Import the real parser lazily (keeps this module import-light/testable)."""
+    """Import the real parser lazily (keeps this module import-light/testable).
+
+    The parser re-execs into a project ``.venv`` at import time; that's meant for
+    interactive/IDE use and must not fire in a Lambda (or any headless run), so we
+    set the parser's documented opt-out before importing.
+    """
+    os.environ.setdefault("TRAFFIC_PARSER_NO_VENV_REEXEC", "1")
     from traffic_counts_parser import parse_xlsx
 
     return parse_xlsx
