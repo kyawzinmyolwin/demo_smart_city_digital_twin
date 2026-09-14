@@ -84,6 +84,10 @@
     .hist-controls { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 6px; }
     .hist-controls select, .hist-controls button { font-size: 11px; padding: 3px 6px; }
     .hist-status { font-size: 11px; color: #475569; margin-bottom: 4px; min-height: 14px; }
+    .counts-result { max-height: 180px; overflow: auto; }
+    .counts-table { border-collapse: collapse; width: 100%; font-size: 10.5px; }
+    .counts-table th, .counts-table td { border-bottom: 1px solid #e2e8f0; padding: 2px 5px; text-align: left; white-space: nowrap; }
+    .counts-table th { color: #475569; font-weight: 600; position: sticky; top: 0; background: #fff; }
   </style>
 </head>
 <body>
@@ -163,6 +167,17 @@
       </div>
       <div class="hist-status" id="hist-status"></div>
       <div class="chart-box"><canvas id="chart-hist"></canvas></div>
+    </div>
+
+    <div class="hist-block">
+      <strong>CCC intersection counts</strong>
+      <div class="hist-controls">
+        <select id="counts-intersection"><option value="">Intersection…</option></select>
+        <select id="counts-date"><option value="">Date…</option></select>
+        <button type="button" id="counts-load">Load</button>
+      </div>
+      <div class="hist-status" id="counts-status">Set ?counts=&lt;endpoint&gt; to enable</div>
+      <div id="counts-result" class="counts-result"></div>
     </div>
   </div>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
@@ -958,6 +973,88 @@
 
   const histLoadBtn = document.getElementById("hist-load");
   if (histLoadBtn) histLoadBtn.addEventListener("click", loadHistory);
+
+  // ---- CCC intersection counts (from the traffic-count ETL query API) -------
+  // Historical Miovision turning counts, served by the query-traffic-counts
+  // Lambda via API Gateway. Point the page at it with ?counts=<endpoint>, e.g.
+  //   ?counts=https://xxxx.execute-api.ap-southeast-2.amazonaws.com/prod/traffic-counts
+  // With no ?counts= the panel just shows a hint (the live map is unaffected).
+  const COUNTS_URL = new URLSearchParams(window.location.search).get("counts") || "";
+  const cIntersection = document.getElementById("counts-intersection");
+  const cDate = document.getElementById("counts-date");
+  const cLoadBtn = document.getElementById("counts-load");
+  const cStatus = document.getElementById("counts-status");
+  const cResult = document.getElementById("counts-result");
+
+  function cSetStatus(msg) { if (cStatus) cStatus.textContent = msg; }
+  function esc(s) {
+    return String(s).replace(/[&<>"]/g, function (ch) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch];
+    });
+  }
+  function cOptions(placeholder, values) {
+    return '<option value="">' + placeholder + "</option>" +
+      values.map(function (v) { return '<option value="' + esc(v) + '">' + esc(v) + "</option>"; }).join("");
+  }
+  async function cFetch(params) {
+    const resp = await fetch(COUNTS_URL + (params ? "?" + params : ""));
+    if (!resp.ok && resp.status !== 404) throw new Error("HTTP " + resp.status);
+    return resp.json();
+  }
+
+  async function cInit() {
+    if (!COUNTS_URL) return;                 // leave the hint in place
+    cSetStatus("loading intersections…");
+    try {
+      const data = await cFetch("");
+      const ids = data.intersections || [];
+      cIntersection.innerHTML = cOptions("Intersection…", ids);
+      cSetStatus(ids.length + " intersections");
+    } catch (e) { cSetStatus("could not reach counts API"); }
+  }
+
+  async function cLoadDates() {
+    cDate.innerHTML = cOptions("Date…", []);
+    cResult.innerHTML = "";
+    const iid = cIntersection.value;
+    if (!iid) return;
+    cSetStatus("loading dates…");
+    try {
+      const data = await cFetch("intersection=" + encodeURIComponent(iid));
+      const dates = data.dates || [];
+      cDate.innerHTML = cOptions("Date…", dates);
+      cSetStatus(dates.length + " survey dates");
+    } catch (e) { cSetStatus("could not load dates"); }
+  }
+
+  function renderCounts(rows) {
+    if (!rows || !rows.length) { cResult.innerHTML = "<em>no rows</em>"; return; }
+    const preferred = ["time", "approach_bound", "movement", "lights", "other_vehicles", "bicycles_on_road", "totals"];
+    const present = preferred.filter(function (k) { return k in rows[0]; });
+    const cols = present.length ? present : Object.keys(rows[0]).slice(0, 6);
+    const head = "<tr>" + cols.map(function (c) { return "<th>" + esc(c) + "</th>"; }).join("") + "</tr>";
+    const body = rows.slice(0, 50).map(function (r) {
+      return "<tr>" + cols.map(function (c) { return "<td>" + esc(r[c] == null ? "" : r[c]) + "</td>"; }).join("") + "</tr>";
+    }).join("");
+    cResult.innerHTML = '<table class="counts-table"><thead>' + head + "</thead><tbody>" + body + "</tbody></table>";
+  }
+
+  async function loadCounts() {
+    if (!COUNTS_URL) { cSetStatus("Set ?counts=<endpoint> to enable"); return; }
+    const iid = cIntersection.value, date = cDate.value;
+    if (!iid || !date) { cSetStatus("pick an intersection and date"); return; }
+    cSetStatus("loading…");
+    try {
+      const data = await cFetch("intersection=" + encodeURIComponent(iid) + "&date=" + encodeURIComponent(date));
+      if (data.found === false) { cResult.innerHTML = "<em>not found</em>"; cSetStatus("no data"); return; }
+      renderCounts(data.rows);
+      cSetStatus((data.rowCount != null ? data.rowCount : (data.rows || []).length) + " rows");
+    } catch (e) { cSetStatus("fetch failed"); }
+  }
+
+  if (cIntersection) cIntersection.addEventListener("change", cLoadDates);
+  if (cLoadBtn) cLoadBtn.addEventListener("click", loadCounts);
+  cInit();
   // -------------------------------------------------------------------------
 
   loadFromFetch().catch(function () {
