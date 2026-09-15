@@ -75,24 +75,52 @@ _SUMOCFG = """<?xml version='1.0' encoding='UTF-8'?>
 """
 
 
-def filter_csv_by_date(src: Path, dst: Path, survey_date: str) -> int:
-    """Write rows of ``src`` whose survey_date matches ``survey_date`` to ``dst``.
+def filter_csv(
+    src: Path,
+    dst: Path,
+    *,
+    survey_date: str | None = None,
+    start_time: str | None = None,
+    end_time: str | None = None,
+) -> int:
+    """Write rows of ``src`` matching the given filters to ``dst``; return rows kept.
 
-    Returns the number of data rows kept. Pure file I/O, so it's testable without
+    ``survey_date`` keeps rows whose survey_date starts with it (YYYY-MM-DD).
+    ``start_time``/``end_time`` keep rows whose ``time`` slot is in the half-open
+    window [start, end) — e.g. 09:00..11:00 keeps the 09:00..10:45 slots (each 15-min
+    slot is labelled by its start), matching "9AM to 11AM". Times are zero-padded
+    HH:MM, so plain string comparison is correct. Pure file I/O — testable without
     SUMO or the network.
     """
     with src.open(newline="") as fin, dst.open("w", newline="") as fout:
         reader = csv.DictReader(fin)
-        if reader.fieldnames is None or "survey_date" not in reader.fieldnames:
+        fn = reader.fieldnames
+        if fn is None or "survey_date" not in fn:
             raise ValueError("CSV has no 'survey_date' column")
-        writer = csv.DictWriter(fout, fieldnames=reader.fieldnames)
+        if (start_time or end_time) and "time" not in fn:
+            raise ValueError("CSV has no 'time' column — cannot filter by time window")
+        writer = csv.DictWriter(fout, fieldnames=fn)
         writer.writeheader()
         kept = 0
         for row in reader:
-            if (row.get("survey_date") or "").strip().startswith(survey_date):
-                writer.writerow(row)
-                kept += 1
+            if survey_date and not (row.get("survey_date") or "").strip().startswith(survey_date):
+                continue
+            if start_time or end_time:
+                t = (row.get("time") or "").strip()
+                if not t:
+                    continue
+                if start_time and t < start_time:
+                    continue
+                if end_time and t >= end_time:
+                    continue
+            writer.writerow(row)
+            kept += 1
     return kept
+
+
+def filter_csv_by_date(src: Path, dst: Path, survey_date: str) -> int:
+    """Back-compat wrapper: slice ``src`` to one survey date. See ``filter_csv``."""
+    return filter_csv(src, dst, survey_date=survey_date)
 
 
 def main() -> int:
@@ -103,7 +131,13 @@ def main() -> int:
     ap.add_argument("--survey-date", default=None,
                     help="Keep only this survey date (YYYY-MM-DD); default: all dates in the CSV.")
     ap.add_argument("--period", choices=("AM", "PM", "ALL"), default="ALL",
-                    help="Time-of-day bucket to keep (default: ALL).")
+                    help="Coarse time-of-day bucket to keep (default: ALL). For an exact "
+                         "window use --start-time/--end-time instead.")
+    ap.add_argument("--start-time", default=None,
+                    help="Keep only count slots at or after this time (HH:MM, e.g. 09:00).")
+    ap.add_argument("--end-time", default=None,
+                    help="Keep only count slots before this time (HH:MM, e.g. 11:00). "
+                         "The window is half-open [start, end): 09:00..11:00 = the 9-11AM slots.")
     ap.add_argument("--min-count", type=int, default=1, help="Drop count groups below this (default: 1).")
     ap.add_argument("--timeline", choices=("stacked", "calendar"), default="stacked",
                     help="How count slots map to sim time (passed to the demand generator). "
@@ -120,16 +154,29 @@ def main() -> int:
     routes_path = SCENARIOS_DIR / f"{args.name}.rou.xml"
     sumocfg_path = SCENARIOS_DIR / f"{args.name}.sumocfg"
 
-    # 1. optionally slice to one survey date
+    # 1. optionally slice by survey date and/or time-of-day window
     csv_in = args.traffic_csv
-    if args.survey_date:
+    if args.survey_date or args.start_time or args.end_time:
         sliced = SCENARIOS_DIR / f"{args.name}.counts.csv"
-        kept = filter_csv_by_date(args.traffic_csv, sliced, args.survey_date)
+        kept = filter_csv(
+            args.traffic_csv, sliced,
+            survey_date=args.survey_date,
+            start_time=args.start_time,
+            end_time=args.end_time,
+        )
+        crit = ", ".join(
+            p for p in (
+                f"date={args.survey_date}" if args.survey_date else "",
+                f"time>={args.start_time}" if args.start_time else "",
+                f"time<{args.end_time}" if args.end_time else "",
+            ) if p
+        )
         if kept == 0:
-            print(f"Error: no rows for survey_date {args.survey_date} in {args.traffic_csv.name}",
+            print(f"Error: no rows matching [{crit}] in {args.traffic_csv.name}. "
+                  f"Note the data covers 2016-01..2025-08 (45 survey days) and 06:30-18:15 slots.",
                   file=sys.stderr)
             return 1
-        print(f"sliced {kept} rows for {args.survey_date} -> {sliced.name}")
+        print(f"sliced {kept} rows for [{crit}] -> {sliced.name}")
         csv_in = sliced
 
     # 2. run the existing demand generator
