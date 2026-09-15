@@ -38,8 +38,11 @@ from _sim_root import DEMAND_DIR, NETWORK_DIR, SIM_ROOT  # noqa: E402
 
 SCRIPTS_DIR = Path(__file__).resolve().parent
 SCENARIOS_DIR = SIM_ROOT / "scenarios"
-NET_NAME = "Christchurch_Central_City_main_streets.net.xml"
-ADD_NAME = "Christchurch_Central_City_main_streets.add.xml"
+# The counts-derived demand rides on the INTERSECTION-GRAPH network built by
+# sumo_network_from_geo.py (edge ids "e_<from>_<to>", node ids = intersection_id),
+# NOT the calibrated street net — those edge ids don't exist there. Likewise there
+# is no matching .add.xml (the street net's detectors/TLS are keyed to street lanes).
+NET_NAME = "christchurch_intersections.net.xml"
 DEFAULT_CSV = DEMAND_DIR / "traffic_18MAY2026_130842.csv"
 
 _EDGES_HELP = (
@@ -60,7 +63,6 @@ _SUMOCFG = """<?xml version='1.0' encoding='UTF-8'?>
     <input>
         <net-file value="../data/output/network/{net}" />
         <route-files value="{routes}" />
-        <additional-files value="../data/output/network/{add}" />
     </input>
     <time>
         <begin value="0" />
@@ -152,8 +154,14 @@ def main() -> int:
         return 2
 
     # 3. write the scenario sumocfg
+    net_xml = NETWORK_DIR / NET_NAME
+    if not net_xml.is_file():
+        print(f"warning: {NET_NAME} not found in data/output/network/ — the scenario\n"
+              f"  needs the compiled intersection net. Run sumo_network_from_geo.py WITHOUT\n"
+              f"  --no-netconvert (it produces {NET_NAME}) before playing this scenario.",
+              file=sys.stderr)
     sumocfg_path.write_text(
-        _SUMOCFG.format(net=NET_NAME, add=ADD_NAME, routes=routes_path.name), encoding="utf-8"
+        _SUMOCFG.format(net=NET_NAME, routes=routes_path.name), encoding="utf-8"
     )
     print(f"wrote {routes_path.name} + {sumocfg_path.name}")
     print("\nplay it (demand starts at t=0, so --jump-to 0):")
