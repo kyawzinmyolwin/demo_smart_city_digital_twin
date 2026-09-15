@@ -11,9 +11,11 @@ does not re-implement any traffic modelling:
   2. run the demand generator (optionally AM/PM) -> scenarios/<name>.rou.xml,
   3. write scenarios/<name>.sumocfg pointing the CBD network at that demand.
 
-You then play it with run_traci.py. Because the generator lays counts out on a
-"stacked" timeline from t=0, run the scenario with ``--jump-to 0`` (not the
-default 06:30 jump):
+You then play it with run_traci.py. The generator lays counts out from t=0 —
+either "stacked" (slots packed into consecutive windows; the default) or
+"calendar" (--timeline calendar: slots keep their real time gaps, still anchored
+at t=0). Either way, run the scenario with ``--jump-to 0`` (not the default
+06:30 jump):
 
     python scripts/make_cbd_scenario.py --name am_2020 --survey-date 2020-02-17 --period AM
     python scripts/run_traci.py --sumocfg scenarios/am_2020.sumocfg --no-gui --emit --jump-to 0
@@ -103,6 +105,11 @@ def main() -> int:
     ap.add_argument("--period", choices=("AM", "PM", "ALL"), default="ALL",
                     help="Time-of-day bucket to keep (default: ALL).")
     ap.add_argument("--min-count", type=int, default=1, help="Drop count groups below this (default: 1).")
+    ap.add_argument("--timeline", choices=("stacked", "calendar"), default="stacked",
+                    help="How count slots map to sim time (passed to the demand generator). "
+                         "stacked (default): slots packed into consecutive windows from t=0. "
+                         "calendar: slots keep their real time gaps (still anchored at t=0, "
+                         "i.e. seconds since the earliest slot). Either way, play with --jump-to 0.")
     args = ap.parse_args()
 
     if not args.traffic_csv.is_file():
@@ -132,6 +139,7 @@ def main() -> int:
         "--output", str(routes_path),
         "--period", args.period,
         "--min-count", str(args.min_count),
+        "--timeline", args.timeline,
     ]
     edges_xml = NETWORK_DIR / "sumo_plain_edges.edg.xml"
     if not edges_xml.is_file():
