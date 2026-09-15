@@ -22,7 +22,7 @@ from typing import Any
 
 import boto3
 
-from etl.ingest import run_ingest
+from etl.ingest import rebuild_name_index, run_ingest
 from etl.s3_store import S3ObjectStore
 
 DEFAULT_FOLDER_ID = "1oP5gcuKR1bHB9Xn2B4ILZZd_LhpMggxU"
@@ -43,6 +43,13 @@ def _resolve_max_files(event: Any) -> int | None:
 
 def lambda_handler(event: Any = None, context: Any = None) -> dict[str, Any]:
     bucket = os.environ["DATA_BUCKET"]
+
+    # One-off: rebuild the id -> name index from already-processed objects (no
+    # Drive access / re-parse). Trigger with {"rebuild_names": true}.
+    if isinstance(event, dict) and event.get("rebuild_names"):
+        count = rebuild_name_index(S3ObjectStore(bucket))
+        return {"statusCode": 200, "rebuiltNames": count}
+
     secret_arn = os.environ["DRIVE_SECRET_ARN"]
     folder_id = os.environ.get("DRIVE_FOLDER_ID") or DEFAULT_FOLDER_ID
 

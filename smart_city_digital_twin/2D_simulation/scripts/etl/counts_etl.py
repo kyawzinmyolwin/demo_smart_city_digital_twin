@@ -23,9 +23,44 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
+
+# Where the id -> human-name lookup lives in the store (maintained by ingest,
+# read by the query discovery so the dropdown can show names).
+NAMES_INDEX_KEY = "index/intersection_names.json"
+
+# Filename -> name parsing pieces. CCC workbook names look like
+#   I0007_Kirk___Miners___West_Coast_339745_08-24-2016.xls
+# i.e. <study id>_<streets>_<study number>_<MM-DD-YYYY>.<ext>, with '___'
+# separating streets and single '_' standing in for a space within a name.
+_STUDY_ID_PREFIX = re.compile(r"^I?\d+[_\s.\-]+", re.I)
+_TRAILING_META = re.compile(r"[_\s]+\d{3,}(?:[_\s]+\d{1,2}-\d{1,2}-\d{2,4})?$")
+_TRAILING_DATE = re.compile(r"[_\s]+\d{1,2}-\d{1,2}-\d{2,4}$")
+_TRAILING_DESC = re.compile(
+    r"[_\s]+(?:intersection|counts?|ped\w*|turning\s*counts?|traffic\s*counts?)\s*$", re.I
+)
+
+
+def intersection_name_from_filename(filename: str) -> str:
+    """Best-effort human name from a CCC workbook filename.
+
+    'I0007_Kirk___Miners___West_Coast_339745_08-24-2016.xls'
+        -> 'Kirk / Miners / West Coast'
+
+    Heuristic and imperfect across the different yearly filename conventions —
+    good enough to label a dropdown; returns '' if nothing usable remains.
+    """
+    stem = (filename or "").rsplit("/", 1)[-1].rsplit(".", 1)[0]
+    stem = _STUDY_ID_PREFIX.sub("", stem)
+    stem = _TRAILING_META.sub("", stem)
+    stem = _TRAILING_DATE.sub("", stem)
+    stem = _TRAILING_DESC.sub("", stem)
+    # Runs of '_' separate streets; a single '_' is a space inside a street name.
+    stem = re.sub(r"_{2,}", "\x00", stem).replace("_", " ").replace("\x00", " / ")
+    return re.sub(r"\s{2,}", " ", stem).strip(" /")
 
 
 @dataclass

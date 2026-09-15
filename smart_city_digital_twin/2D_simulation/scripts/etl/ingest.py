@@ -22,7 +22,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Protocol
 
-from etl.counts_etl import clean_workbook, group_by_intersection_date
+from etl.counts_etl import (
+    NAMES_INDEX_KEY,
+    clean_workbook,
+    group_by_intersection_date,
+    intersection_name_from_filename,
+)
 from etl.drive_client import (
     download as drive_download,
     merge_manifest,
@@ -110,6 +115,7 @@ def run_ingest(
     summary.selected = len(todo)
 
     handled = []  # only these advance the manifest
+    names_seen: dict[str, str] = {}  # intersection id -> human name (this pass)
     with tempfile.TemporaryDirectory() as tmp:
         for f in todo:
             seg = _folder_seg(f.folder)
@@ -142,6 +148,8 @@ def run_ingest(
                             "rows": rows,
                         },
                     )
+                    if iid:
+                        names_seen.setdefault(iid, intersection_name_from_filename(f.name))
                 summary.processed += 1
             else:
                 store.put_json(
@@ -152,5 +160,31 @@ def run_ingest(
                 summary.rejects.append({"name": f.name, "reason": result.reason})
             handled.append(f)
 
+    if names_seen:
+        merged_names = {**(store.get_json(NAMES_INDEX_KEY) or {}), **names_seen}
+        store.put_json(NAMES_INDEX_KEY, merged_names)
+
     store.put_json(MANIFEST_KEY, merge_manifest(handled, manifest))
     return summary
+
+
+def rebuild_name_index(store, *, processed_prefix: str = "processed-traffic-data") -> int:
+    """Populate the id -> name index from already-processed objects.
+
+    A one-off for data ingested before names were tracked: reads one object per
+    intersection (its ``source.name``), derives a name, and writes the index —
+    no need to re-download or re-parse the workbooks. Returns the id count.
+    """
+    seen: dict[str, str] = {}
+    for k in store.list_keys(f"{processed_prefix}/"):
+        rel = k[len(processed_prefix) + 1 :]
+        if "/" not in rel:
+            continue
+        iid = rel.split("/", 1)[0]
+        if iid in seen:
+            continue  # one read per intersection is enough
+        doc = store.get_json(k) or {}
+        seen[iid] = intersection_name_from_filename((doc.get("source") or {}).get("name", ""))
+    merged = {**(store.get_json(NAMES_INDEX_KEY) or {}), **seen}
+    store.put_json(NAMES_INDEX_KEY, merged)
+    return len(seen)

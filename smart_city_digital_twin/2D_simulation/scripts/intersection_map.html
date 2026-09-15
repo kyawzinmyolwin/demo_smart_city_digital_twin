@@ -1007,9 +1007,14 @@
     cSetStatus("loading intersections…");
     try {
       const data = await cFetch("");
-      const ids = data.intersections || [];
-      cIntersection.innerHTML = cOptions("Intersection…", ids);
-      cSetStatus(ids.length + " intersections");
+      const items = data.intersections || [];
+      cIntersection.innerHTML = '<option value="">Intersection…</option>' +
+        items.map(function (it) {
+          var id = (it && it.id != null) ? it.id : it;   // tolerate the old string shape
+          var nm = (it && it.name) ? it.name : "";
+          return '<option value="' + esc(id) + '">' + esc(nm ? id + " — " + nm : id) + "</option>";
+        }).join("");
+      cSetStatus(items.length + " intersections");
     } catch (e) { cSetStatus("could not reach counts API"); }
   }
 

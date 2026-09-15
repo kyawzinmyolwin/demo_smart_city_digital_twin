@@ -66,7 +66,7 @@ def test_intersection_only_lists_dates():
 def test_no_params_is_discovery():
     with mocked() as lq:
         resp = lq.lambda_handler({})
-        assert json.loads(resp["body"])["intersections"] == ["I0007"]
+        assert json.loads(resp["body"])["intersections"] == [{"id": "I0007", "name": ""}]
 
 
 if __name__ == "__main__":

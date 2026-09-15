@@ -35,6 +35,9 @@ class MemStore:
     def put_json(self, key, obj):
         self.docs[key] = obj
 
+    def list_keys(self, prefix):
+        return [k for k in {**self.blobs, **self.docs} if k.startswith(prefix)]
+
 
 def _file(fid, name, folder="2026 Intersection", mtime="2026-01-01T00:00:00Z"):
     return DriveFile(id=fid, name=name, mime_type="…sheet", modified_time=mtime, folder=folder)
@@ -133,6 +136,29 @@ def test_max_files_bounds_the_pass():
     s = run_ingest(store, "K", top_folder_id="TOP", max_files=2,
                    walk=_fake_walk(files), download=_fake_download(), clean=clean)
     assert s.scanned == 5 and s.selected == 2 and s.processed == 2
+
+
+def test_run_ingest_writes_name_index():
+    from etl.counts_etl import NAMES_INDEX_KEY
+    name = "I0007_Kirk___Miners___West_Coast_339745_08-24-2016.xlsx"
+    clean = _fake_clean({name: ("ok", [{"intersection_id": "I0007", "survey_date": "2016-08-24"}])})
+    store = MemStore()
+    run_ingest(store, "K", top_folder_id="T",
+               walk=_fake_walk([_file("a", name)]), download=_fake_download(), clean=clean)
+    assert store.docs[NAMES_INDEX_KEY]["I0007"] == "Kirk / Miners / West Coast"
+
+
+def test_rebuild_name_index_from_processed_objects():
+    from etl.counts_etl import NAMES_INDEX_KEY
+    from etl.ingest import rebuild_name_index
+    store = MemStore()
+    store.docs["processed-traffic-data/I0007/2016-08-24.json"] = {
+        "source": {"name": "I0007_Kirk___Miners___West_Coast_339745_08-24-2016.xlsx"}
+    }
+    store.docs["processed-traffic-data/I0007/2020-02-17.json"] = {"source": {"name": "other.xlsx"}}
+    n = rebuild_name_index(store)
+    assert n == 1                                   # one read per intersection id
+    assert store.docs[NAMES_INDEX_KEY]["I0007"] == "Kirk / Miners / West Coast"
 
 
 if __name__ == "__main__":

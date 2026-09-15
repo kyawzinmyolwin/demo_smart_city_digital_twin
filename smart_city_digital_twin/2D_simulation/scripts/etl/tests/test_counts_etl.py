@@ -14,7 +14,12 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from etl.counts_etl import clean_workbook, group_by_intersection_date, to_json_bytes  # noqa: E402
+from etl.counts_etl import (  # noqa: E402
+    clean_workbook,
+    group_by_intersection_date,
+    intersection_name_from_filename,
+    to_json_bytes,
+)
 
 
 def _rows_parser(rows):
@@ -80,6 +85,14 @@ def test_group_by_intersection_date():
     assert len(groups[("I1", "2020-01-01")]) == 2
     assert groups[("I2", "2021-05-05")] == [{"intersection_id": "I2", "survey_date": "2021-05-05", "v": 3}]
     assert ("", "") in groups
+
+
+def test_intersection_name_from_filename():
+    f = intersection_name_from_filename
+    assert f("I0007_Kirk___Miners___West_Coast_339745_08-24-2016.xls") == "Kirk / Miners / West Coast"
+    assert f("I0055_SP_Pound_Roberts_390379_02-22-2017.xls") == "SP Pound Roberts"
+    assert f("I0019_Kirk Road_Maddisons Road_Intersection.xlsx") == "Kirk Road Maddisons Road"
+    assert f("") == ""
 
 
 if __name__ == "__main__":

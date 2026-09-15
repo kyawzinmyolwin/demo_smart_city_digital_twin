@@ -13,6 +13,8 @@ from __future__ import annotations
 
 from typing import Any, Protocol
 
+from etl.counts_etl import NAMES_INDEX_KEY
+
 PROCESSED_PREFIX = "processed-traffic-data"
 
 
@@ -60,7 +62,8 @@ def query_counts(
         return {"intersection": intersection, "dates": dates}
 
     keys = store.list_keys(f"{prefix}/")
-    intersections = sorted(
+    ids = sorted(
         {k[len(prefix) + 1 :].split("/", 1)[0] for k in keys if "/" in k[len(prefix) + 1 :]}
     )
-    return {"intersections": intersections}
+    names = store.get_json(NAMES_INDEX_KEY) or {}
+    return {"intersections": [{"id": i, "name": names.get(i, "")} for i in ids]}

@@ -55,9 +55,19 @@ def test_intersection_only_lists_dates_sorted():
     assert r["dates"] == ["2016-08-24", "2026-02-24"]
 
 
-def test_discovery_lists_intersections():
+def test_discovery_lists_intersections_with_blank_names_by_default():
     r = query_counts(_store())
-    assert r["intersections"] == ["I0003", "I0007"]
+    assert r["intersections"] == [{"id": "I0003", "name": ""}, {"id": "I0007", "name": ""}]
+
+
+def test_discovery_includes_names_when_index_present():
+    from etl.counts_etl import NAMES_INDEX_KEY
+    s = _store()
+    s.docs[NAMES_INDEX_KEY] = {"I0007": "Kirk / Miners / West Coast"}
+    r = query_counts(s)
+    by_id = {d["id"]: d["name"] for d in r["intersections"]}
+    assert by_id["I0007"] == "Kirk / Miners / West Coast"
+    assert by_id["I0003"] == ""      # not in the index -> blank
 
 
 def test_fallback_keyed_object_date_parsing():
