@@ -120,10 +120,22 @@ def main() -> int:
         "--period", args.period,
         "--min-count", str(args.min_count),
     ]
+    edges_xml = NETWORK_DIR / "sumo_plain_edges.edg.xml"
+    if not edges_xml.is_file():
+        print(
+            f"Missing {edges_xml} (a network build product). Regenerate it from the\n"
+            f"compiled net with:\n"
+            f"  netconvert -s {NETWORK_DIR / NET_NAME} "
+            f"--plain-output-prefix {NETWORK_DIR / 'sumo_plain_edges'}\n"
+            f"(or rebuild via sumo_network_from_geo.py if the counts don't match).",
+            file=sys.stderr,
+        )
+        return 1
+
     print("running:", " ".join(cmd))
     result = subprocess.run(cmd)
     if result.returncode != 0:
-        print("demand generation failed (is sumo_plain_edges.edg.xml present?)", file=sys.stderr)
+        print("demand generation failed.", file=sys.stderr)
         return result.returncode
 
     # 3. write the scenario sumocfg
