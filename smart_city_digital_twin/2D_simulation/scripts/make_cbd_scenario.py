@@ -128,6 +128,12 @@ def main() -> int:
     ap.add_argument("--name", required=True, help="Scenario name (used for the output filenames).")
     ap.add_argument("--traffic-csv", type=Path, default=DEFAULT_CSV,
                     help=f"Parsed counts CSV (default: {DEFAULT_CSV.name}).")
+    ap.add_argument("--from-etl-date", default=None,
+                    help="Fetch this survey date's counts from the ETL store (S3) instead of "
+                         "using --traffic-csv. Needs --etl-bucket (or ETL_DATA_BUCKET) and AWS creds.")
+    ap.add_argument("--etl-bucket", default=None,
+                    help="ETL data bucket for --from-etl-date (or set ETL_DATA_BUCKET). "
+                         "terraform output etl_data_bucket.")
     ap.add_argument("--survey-date", default=None,
                     help="Keep only this survey date (YYYY-MM-DD); default: all dates in the CSV.")
     ap.add_argument("--period", choices=("AM", "PM", "ALL"), default="ALL",
@@ -146,13 +152,35 @@ def main() -> int:
                          "i.e. seconds since the earliest slot). Either way, play with --jump-to 0.")
     args = ap.parse_args()
 
-    if not args.traffic_csv.is_file():
-        print(f"Error: counts CSV not found: {args.traffic_csv}", file=sys.stderr)
-        return 1
-
     SCENARIOS_DIR.mkdir(parents=True, exist_ok=True)
     routes_path = SCENARIOS_DIR / f"{args.name}.rou.xml"
     sumocfg_path = SCENARIOS_DIR / f"{args.name}.sumocfg"
+
+    # 0. optionally pull the counts for one date straight from the ETL store (S3).
+    #    Lazy import so boto3/S3 is only required when this path is used.
+    if args.from_etl_date:
+        import os
+        from etl.s3_store import S3ObjectStore
+        from etl.scenario_bridge import build_counts_csv_for_date
+        bucket = args.etl_bucket or os.environ.get("ETL_DATA_BUCKET")
+        if not bucket:
+            print("Error: --from-etl-date needs --etl-bucket or ETL_DATA_BUCKET "
+                  "(terraform output etl_data_bucket).", file=sys.stderr)
+            return 2
+        etl_csv = SCENARIOS_DIR / f"{args.name}.etl.csv"
+        summary = build_counts_csv_for_date(S3ObjectStore(bucket), args.from_etl_date, etl_csv)
+        if summary["rows"] == 0:
+            print(f"Error: no ETL counts for {args.from_etl_date} in s3://{bucket}. "
+                  f"Has the ETL ingested this date? (Only surveyed days exist.)", file=sys.stderr)
+            return 1
+        slots = summary["time_slots"]
+        print(f"fetched {summary['rows']} rows / {summary['intersections']} intersections for "
+              f"{args.from_etl_date} (slots {slots[0]}..{slots[-1]}) -> {etl_csv.name}")
+        args.traffic_csv = etl_csv
+
+    if not args.traffic_csv.is_file():
+        print(f"Error: counts CSV not found: {args.traffic_csv}", file=sys.stderr)
+        return 1
 
     # 1. optionally slice by survey date and/or time-of-day window
     csv_in = args.traffic_csv
