@@ -30,13 +30,17 @@ from pathlib import Path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from etl.s3_store import S3ObjectStore  # noqa: E402
-from etl.scenario_bridge import build_counts_csv_for_date, PROCESSED_PREFIX  # noqa: E402
+from etl.scenario_bridge import (  # noqa: E402
+    available_dates, build_counts_csv_for_date, PROCESSED_PREFIX,
+)
 
 
 def main() -> int:
     ap = argparse.ArgumentParser(description="Fetch a date's CCC counts from the ETL store -> CSV.")
-    ap.add_argument("--date", required=True, help="Survey date to fetch (YYYY-MM-DD).")
-    ap.add_argument("--output", type=Path, required=True, help="Output CSV path.")
+    ap.add_argument("--date", help="Survey date to fetch (YYYY-MM-DD).")
+    ap.add_argument("--output", type=Path, help="Output CSV path (required unless --list-dates).")
+    ap.add_argument("--list-dates", action="store_true",
+                    help="List the survey dates the ETL has ingested (with #intersections) and exit.")
     ap.add_argument("--bucket", default=os.environ.get("ETL_DATA_BUCKET"),
                     help="ETL data bucket (or set ETL_DATA_BUCKET). terraform output etl_data_bucket.")
     ap.add_argument("--prefix", default=PROCESSED_PREFIX,
@@ -49,6 +53,22 @@ def main() -> int:
         return 2
 
     store = S3ObjectStore(args.bucket)
+
+    if args.list_dates:
+        dates = available_dates(store, prefix=args.prefix)
+        if not dates:
+            print(f"No dates ingested yet in s3://{args.bucket}/{args.prefix}/. "
+                  f"Run the ETL ingest Lambda to populate it.", file=sys.stderr)
+            return 1
+        print(f"{len(dates)} survey date(s) ingested (date: #intersections):")
+        for d in sorted(dates):
+            print(f"  {d}: {dates[d]}")
+        return 0
+
+    if not args.date or not args.output:
+        print("Error: --date and --output are required (unless --list-dates).", file=sys.stderr)
+        return 2
+
     summary = build_counts_csv_for_date(store, args.date, args.output, prefix=args.prefix)
 
     if summary["rows"] == 0:

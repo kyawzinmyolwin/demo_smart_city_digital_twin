@@ -57,6 +57,18 @@ def keys_for_date(store: ReadableStore, date: str, *, prefix: str = PROCESSED_PR
     )
 
 
+def available_dates(
+    store: ReadableStore, *, prefix: str = PROCESSED_PREFIX
+) -> dict[str, int]:
+    """Every survey date present in the store, mapped to how many intersections
+    have data for it. Empty dict means the ETL hasn't ingested anything yet."""
+    counts: dict[str, int] = {}
+    for k in store.list_keys(f"{prefix}/"):
+        if k.endswith(".json"):
+            counts[_date_from_key(k)] = counts.get(_date_from_key(k), 0) + 1
+    return counts
+
+
 def fetch_rows_for_date(
     store: ReadableStore, date: str, *, prefix: str = PROCESSED_PREFIX
 ) -> list[dict[str, Any]]:

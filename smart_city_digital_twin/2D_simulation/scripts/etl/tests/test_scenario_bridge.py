@@ -12,6 +12,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from etl.scenario_bridge import (  # noqa: E402
+    available_dates,
     build_counts_csv_for_date,
     counts_fieldnames,
     fetch_rows_for_date,
@@ -93,6 +94,15 @@ def test_write_counts_csv_empty_writes_header_only(tmp_path):
     lines = dst.read_text().splitlines()
     assert len(lines) == 1  # header only
     assert "intersection_id" in lines[0]
+
+
+def test_available_dates_counts_intersections_per_date():
+    d = available_dates(_store())
+    assert d == {"2025-08-13": 2, "2020-07-28": 1}
+
+
+def test_available_dates_empty_store():
+    assert available_dates(MemStore()) == {}
 
 
 def test_build_summary_reports_coverage(tmp_path):
