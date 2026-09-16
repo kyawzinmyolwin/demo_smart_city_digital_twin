@@ -138,7 +138,7 @@ def _load_net(args=None):
     return sumolib.net.readNet(str(_net_path_for(args)))
 
 
-async def _run_emitting(traci, args) -> None:
+async def _run_emitting(traci, args, controller=None) -> None:
     """Step the sim and broadcast each Nth step's snapshot over WebSocket.
 
     This is the async twin of the plain while-loop in main(). The key line is the
@@ -172,6 +172,8 @@ async def _run_emitting(traci, args) -> None:
         print("Running simulation ...")
         while not _should_stop(traci, args):
             t = traci.simulation.getTime()
+            if controller is not None:
+                controller.step(traci, t)
             traci.simulationStep()
             step += 1
             # Serialise once per emitted tick, only if a sink actually needs it
@@ -295,7 +297,37 @@ def build_parser() -> argparse.ArgumentParser:
         "action (e.g. the cloud API Gateway wss:// URL). Can be used with or "
         "without --emit.",
     )
+    # --- incident injection (scenario / decision-support twin, Increment 1) ---
+    p.add_argument(
+        "--incident-file",
+        default=None,
+        metavar="PATH",
+        help="JSON incident spec to inject during the run (close_edge/close_lane/"
+        "set_speed/add_vehicles). See incidents.py.",
+    )
+    p.add_argument(
+        "--close-edge",
+        action="append",
+        default=[],
+        metavar="EDGE@START[:END]",
+        help="Quick edge closure, e.g. E123@23460:23760. Repeatable. Shorthand for a "
+        "close_edge incident without writing a spec file.",
+    )
     return p
+
+
+def _build_incidents(args) -> list:
+    """Assemble the incident list from --incident-file and any --close-edge flags."""
+    import json
+
+    from incidents import parse_cli_incident, parse_incidents
+
+    incidents = []
+    if args.incident_file:
+        with open(args.incident_file, encoding="utf-8") as f:
+            incidents.extend(parse_incidents(json.load(f)))
+    incidents.extend(parse_cli_incident(s) for s in (args.close_edge or []))
+    return incidents
 
 
 def main() -> int:
@@ -340,6 +372,14 @@ def main() -> int:
         print(f"Starting SUMO on TraCI port {args.port}:", " ".join(cmd))
         traci.start(cmd, port=args.port)
 
+    controller = None
+    incidents = _build_incidents(args)
+    if incidents:
+        from incidents import IncidentController
+
+        controller = IncidentController(incidents)
+        print(f"Incidents scheduled: {controller.summary}")
+
     try:
         if args.jump_to is not None and args.jump_to > traci.simulation.getTime():
             print(f"Jumping to {args.jump_to:.0f}s ({_fmt_clock(args.jump_to)}) ...")
@@ -350,7 +390,7 @@ def main() -> int:
             # Emitting path: run the loop inside an asyncio event loop so the
             # WebSocket server and/or cloud forwarder run concurrently with the
             # TraCI stepping.
-            asyncio.run(_run_emitting(traci, args))
+            asyncio.run(_run_emitting(traci, args, controller))
         else:
             print("Running simulation ...")
             while True:
@@ -359,6 +399,8 @@ def main() -> int:
                     break
                 if traci.simulation.getMinExpectedNumber() <= 0 and t >= (args.jump_to or 0):
                     break
+                if controller is not None:
+                    controller.step(traci, t)
                 traci.simulationStep()
                 if int(t) % 60 == 0:
                     _print_status(traci)
