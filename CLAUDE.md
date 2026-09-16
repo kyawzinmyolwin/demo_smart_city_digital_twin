@@ -36,9 +36,30 @@ Project context for Claude Code. Read this before touching any file.
       GitHub Actions pipeline, README, architecture diagram, 2-min demo video
 
 ### Phase 2 — Extension features (~97 hours, Weeks 22–28)
-- [ ] Wk 22–24: Congestion alerts (15h) + scenario comparison (30h)
-- [ ] Wk 25–26: Historical replay scrub bar (25h) + threshold metrics panel (12h)
-- [ ] Wk 27–28: Docker Compose one-command demo (15h)
+**DIRECTION CHANGE (2026-09-16): the project pivots to a "scenario / decision-support
+twin".** Instead of replaying historical traffic, the twin now *perturbs the calibrated
+street-net model* (crash / road closure / event demand surge, injected via TraCI) and
+measures the impact — the actual point of a digital twin. Rationale: the historical
+counts→CBD path is estimation on a schematic graph (sparse peak-only surveys, connectivity
+gaps) and hard to defend as "real"; incident/what-if scenarios build on the *strong*
+calibrated model, are honestly framed as synthetic, and are technically smaller work. The
+counts + ETL pipeline are NOT dropped — they become the real-data-calibrated **baseline**
+to compare incidents against, plus a legitimate cloud-engineering showcase.
+
+Decision-support increments (supersede the old scenario-comparison / alerts line items):
+- [ ] Inc 1: Incident-injection hook in run_traci.py (close edge/lane @ time, reopen,
+      speed-limit change, demand surge; config-driven, reproducible) (~10–15h) ← IN PROGRESS
+- [ ] Inc 2: Baseline vs incident comparison (scenario_id-tagged runs, metrics to InfluxDB,
+      side-by-side delta) — absorbs the old "scenario comparison (30h)" item (~15–20h)
+- [ ] Inc 3: Dashboard controls (pick an incident in the GUI, run, watch) + congestion-alert
+      overlay — absorbs the old "congestion alerts (15h)" item (~15–20h)
+- [ ] Inc 4: Impact metrics / reporting (added delay, queue length, affected area) (~10h)
+
+Deferred / de-prioritised by the pivot:
+- [~] Historical replay scrub bar (25h) — counts replay is now the baseline, not a headline
+      feature; keep only if time allows
+- [ ] Threshold metrics panel (12h) — folds into Inc 3's congestion overlay
+- [ ] Docker Compose one-command demo (15h) — still wanted for portfolio
 
 ### Phase 3 — Portfolio wrap-up (Weeks 29–30)
 - [ ] Final README, screenshots, live demo URL
@@ -438,11 +459,16 @@ python3 scripts/run_traci.py --no-gui --jump-to 23400 --end 23430   # real TraCI
 
 ## Where to start — next task
 
-The JSON emitter (Phase 1) and the live-map client are **done** (see Current status). The
-recommended next task is the **Phase 2 cloud pipeline**: stand up the AWS WebSocket API
-Gateway → Lambda (metrics) → InfluxDB Cloud path, with Terraform IaC (see "AWS resources"
-above). Two smaller alternatives if you want a quicker win first: finish the live dashboard
-(3 Chart.js panels + pause/resume) or open the Phase 1 PR.
+Phase 1 (emitter), the live-map client, and the Phase 2 cloud pipeline are all **done** (see
+Current status). **The project has pivoted to a scenario / decision-support twin** (see the
+Phase 2 direction-change note above). The current task is **Increment 1: the incident-injection
+hook** in `run_traci.py` — TraCI-driven perturbations (close edge/lane @ time, reopen, speed
+change, demand surge) on the calibrated street-net model, config-driven and reproducible, so
+the emitter streams the impact live to the dashboard. Then Inc 2 (baseline vs incident) → Inc 3
+(GUI controls + congestion overlay) → Inc 4 (impact metrics).
+
+The counts→CBD scenario tooling (make_cbd_scenario.py, fetch_counts_for_date.py, the ETL
+bridge) stays as the real-data **baseline** path, not the headline feature.
 
 <details><summary>Original Phase 1 emitter brief (completed — kept for reference)</summary>
 
