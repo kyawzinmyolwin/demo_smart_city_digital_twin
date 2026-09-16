@@ -137,6 +137,20 @@
         then click Connect.
       </div>
     </div>
+    <div class="live-block">
+      <strong>Road edges (for incidents)</strong>
+      <label style="display:block;margin-top:6px;font-size:12px;">
+        <input type="checkbox" id="edges-toggle" /> show roads (click one for its id)
+      </label>
+      <div class="hist-status" id="edges-status">off — tick to show roads</div>
+      <div class="hist-status" id="edges-pick"></div>
+      <div class="hint" style="margin-top:6px;">
+        Loads <code>edges.geojson</code> (generate with <code>edges_geojson.py</code>).
+        Click a road to get its edge id and a ready
+        <code>--close-edge</code> command. Override the file via
+        <code>?edges=&lt;url&gt;</code>.
+      </div>
+    </div>
   </div>
   <div id="map"></div>
   <div class="charts-panel" id="charts-panel">
@@ -1060,6 +1074,68 @@
   if (cIntersection) cIntersection.addEventListener("change", cLoadDates);
   if (cLoadBtn) cLoadBtn.addEventListener("click", loadCounts);
   cInit();
+  // -------------------------------------------------------------------------
+
+  // --- Road edge overlay: click a road to read its edge id for incidents ----
+  const EDGES_URL = (new URLSearchParams(window.location.search).get("edges") || "").trim()
+    || "../data/output/network/edges.geojson";
+  const edgeGeoLayer = L.layerGroup();   // not added by default — roads are visually busy
+  const edgesToggle = document.getElementById("edges-toggle");
+  const edgesStatus = document.getElementById("edges-status");
+  const edgesPick = document.getElementById("edges-pick");
+  let edgesLoaded = false;
+
+  function edgesSetStatus(msg) { if (edgesStatus) edgesStatus.textContent = msg; }
+
+  function onEdgeClick(feat) {
+    return function () {
+      const id = feat.properties.id;
+      const name = feat.properties.name || "(unnamed)";
+      const cmd = "--close-edge " + id + "@23700:24300";
+      if (edgesPick) {
+        edgesPick.innerHTML = "<b>" + esc(id) + "</b> — " + esc(name) +
+          "<br><code>" + esc(cmd) + "</code>";
+      }
+    };
+  }
+
+  async function loadEdges() {
+    if (edgesLoaded) return true;
+    edgesSetStatus("loading roads…");
+    try {
+      const resp = await fetch(EDGES_URL, { cache: "no-store" });
+      if (!resp.ok) throw new Error("HTTP " + resp.status);
+      const gj = await resp.json();
+      const feats = gj.features || [];
+      feats.forEach(function (feat) {
+        const coords = (feat.geometry && feat.geometry.coordinates) || [];
+        const latlngs = coords.map(function (c) { return [c[1], c[0]]; }); // lon,lat -> lat,lng
+        if (latlngs.length < 2) return;
+        const pl = L.polyline(latlngs, { color: "#7c3aed", weight: 2, opacity: 0.6 });
+        pl.on("click", onEdgeClick(feat));
+        pl.bindTooltip(feat.properties.id + (feat.properties.name ? " · " + feat.properties.name : ""),
+                       { sticky: true });
+        edgeGeoLayer.addLayer(pl);
+      });
+      edgesLoaded = true;
+      edgesSetStatus(feats.length + " roads — click one for its id");
+      return true;
+    } catch (e) {
+      edgesSetStatus("could not load edges.geojson — run edges_geojson.py, or set ?edges=<url>");
+      return false;
+    }
+  }
+
+  if (edgesToggle) {
+    edgesToggle.addEventListener("change", async function () {
+      if (edgesToggle.checked) {
+        const ok = await loadEdges();
+        if (ok) { edgeGeoLayer.addTo(map); } else { edgesToggle.checked = false; }
+      } else {
+        map.removeLayer(edgeGeoLayer);
+      }
+    });
+  }
   // -------------------------------------------------------------------------
 
   loadFromFetch().catch(function () {
