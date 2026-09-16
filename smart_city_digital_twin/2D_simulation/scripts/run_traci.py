@@ -104,13 +104,38 @@ def _should_stop(traci, args) -> bool:
     return traci.simulation.getMinExpectedNumber() <= 0 and t >= (args.jump_to or 0)
 
 
-def _load_net():
+def _net_path_for(args) -> Path:
+    """The net file the emitter must use for XY -> WGS84 conversion.
+
+    When a --sumocfg is given (a scenario), read that config's <net-file> so the
+    conversion matches the network SUMO is actually running — otherwise a scenario
+    on the intersection graph would be converted with the default street net's
+    projection/offset and land vehicles in the wrong place on the map. Falls back
+    to the project default net when there's no --sumocfg or it can't be parsed.
+    """
+    from sim_pipeline import NET_XML
+
+    cfg = getattr(args, "sumocfg", None)
+    if cfg:
+        try:
+            import xml.etree.ElementTree as ET
+
+            cfg_path = Path(cfg)
+            node = ET.parse(cfg_path).getroot().find(".//net-file")
+            value = node.get("value") if node is not None else None
+            if value:
+                return (cfg_path.parent / value).resolve()
+        except Exception as exc:  # noqa: BLE001 - fall back to the default net, but say why
+            print(f"warning: could not read net-file from {cfg} ({exc}); "
+                  f"using default net for coordinate conversion", file=sys.stderr)
+    return Path(NET_XML)
+
+
+def _load_net(args=None):
     """Load the sumolib net once, for XY -> WGS84 conversion in the emitter."""
     import sumolib  # type: ignore
 
-    from sim_pipeline import NET_XML
-
-    return sumolib.net.readNet(str(NET_XML))
+    return sumolib.net.readNet(str(_net_path_for(args)))
 
 
 async def _run_emitting(traci, args) -> None:
@@ -121,7 +146,7 @@ async def _run_emitting(traci, args) -> None:
     loop so the WebSocket server can accept connections and flush frames before
     we take the next (blocking) simulation step.
     """
-    net = _load_net()
+    net = _load_net(args)
 
     # Two independent sinks: a local WebSocket server (--emit, for the browser
     # dashboard) and/or a cloud forwarder (--emit-target, dials out to API Gateway).
