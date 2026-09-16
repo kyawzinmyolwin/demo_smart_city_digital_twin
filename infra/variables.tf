@@ -84,3 +84,34 @@ variable "sim_host_instance_type" {
   type        = string
   default     = "t3.medium"
 }
+
+# --- ETL: CCC traffic-count workbooks (etl.tf) --------------------------------
+variable "etl_data_bucket_name" {
+  description = <<-EOT
+    S3 bucket for ETL data (raw/processed/rejected workbooks + the manifest).
+    Bucket names are one global namespace, so this has no default — pick a unique
+    lowercase-hyphen name (e.g. christchurch-twin-traffic-data-<you>).
+  EOT
+  type        = string
+}
+
+variable "drive_folder_id" {
+  description = "Top Google Drive folder id for the public CCC intersection counts."
+  type        = string
+  default     = "1oP5gcuKR1bHB9Xn2B4ILZZd_LhpMggxU"
+}
+
+variable "etl_schedule_expression" {
+  description = "EventBridge schedule for the ingest Lambda (rate() or cron())."
+  type        = string
+  default     = "rate(7 days)"
+}
+
+variable "etl_max_files" {
+  description = <<-EOT
+    Optional cap on files handled per ingest run (empty string = no cap). Set a
+    number for a first bounded backfill; the manifest lets repeated runs resume.
+  EOT
+  type        = string
+  default     = ""
+}
