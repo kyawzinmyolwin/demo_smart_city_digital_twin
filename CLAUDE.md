@@ -47,13 +47,26 @@ counts + ETL pipeline are NOT dropped — they become the real-data-calibrated *
 to compare incidents against, plus a legitimate cloud-engineering showcase.
 
 Decision-support increments (supersede the old scenario-comparison / alerts line items):
-- [ ] Inc 1: Incident-injection hook in run_traci.py (close edge/lane @ time, reopen,
-      speed-limit change, demand surge; config-driven, reproducible) (~10–15h) ← IN PROGRESS
-- [ ] Inc 2: Baseline vs incident comparison (scenario_id-tagged runs, metrics to InfluxDB,
-      side-by-side delta) — absorbs the old "scenario comparison (30h)" item (~15–20h)
-- [ ] Inc 3: Dashboard controls (pick an incident in the GUI, run, watch) + congestion-alert
+- [x] Inc 1: Incident-injection hook in run_traci.py — DONE (wk of 21 Sep). `incidents.py`
+      (close_edge/close_lane/set_speed/add_vehicles via TraCI; applies+reverts; 9 unit tests),
+      `--incident-file`/`--close-edge`. Plus supporting tooling: ETL→scenario data bridge
+      (`scenario_bridge.py`, `fetch_counts_for_date.py`), edge-picking helpers
+      (`list_edges.py`, `edges_geojson.py`) and a clickable edge overlay on the dashboard.
+- [ ] Inc 2: Scenario metrics + compare view ← NEXT (this is next week's plan):
+      (a) capture each scenario's metrics into InfluxDB TAGGED BY SCENARIO NAME (avg speed,
+          vehicle counts, congestion) — introduce a `scenario_id` tying a named run to its
+          config + incident spec + metrics (metrics_writer.py currently tags only `simId`);
+      (b) add a dashboard COMPARE VIEW showing a baseline run vs one scenario side by side;
+      (c) write a short design note first: the 2–3 concrete scenarios to model + what
+          "success" is for each (keep runs identical apart from the one changed variable).
+      Absorbs the old "scenario comparison (30h)" item (~15–20h).
+- [ ] Inc 3: Dashboard controls (click a road on the map to INJECT the incident live —
+      the back half of the edge overlay; browser → control path → sim host) + congestion-alert
       overlay — absorbs the old "congestion alerts (15h)" item (~15–20h)
 - [ ] Inc 4: Impact metrics / reporting (added delay, queue length, affected area) (~10h)
+
+Also queued: small deploy polish — ship `edges.geojson` via `deploy_dashboard.sh` so the
+road overlay works on the hosted CloudFront dashboard, not just locally (~1h).
 
 Deferred / de-prioritised by the pivot:
 - [~] Historical replay scrub bar (25h) — counts replay is now the baseline, not a headline
@@ -461,11 +474,13 @@ python3 scripts/run_traci.py --no-gui --jump-to 23400 --end 23430   # real TraCI
 
 Phase 1 (emitter), the live-map client, and the Phase 2 cloud pipeline are all **done** (see
 Current status). **The project has pivoted to a scenario / decision-support twin** (see the
-Phase 2 direction-change note above). The current task is **Increment 1: the incident-injection
-hook** in `run_traci.py` — TraCI-driven perturbations (close edge/lane @ time, reopen, speed
-change, demand surge) on the calibrated street-net model, config-driven and reproducible, so
-the emitter streams the impact live to the dashboard. Then Inc 2 (baseline vs incident) → Inc 3
-(GUI controls + congestion overlay) → Inc 4 (impact metrics).
+Phase 2 direction-change note above). **Increment 1 (the incident-injection hook) is DONE** —
+`incidents.py` + `run_traci.py --incident-file/--close-edge`, plus the ETL→scenario bridge and
+the clickable edge overlay. The **current task is Increment 2: scenario-tagged metrics +
+compare view** — (a) write metrics into InfluxDB tagged by a `scenario_id` (metrics_writer.py
+tags only `simId` today), (b) a dashboard compare view (baseline vs one scenario side by side),
+(c) a short design note fixing the first 2–3 scenarios and success criteria before building.
+Then Inc 3 (click-to-inject live + congestion overlay) → Inc 4 (impact metrics).
 
 The counts→CBD scenario tooling (make_cbd_scenario.py, fetch_counts_for_date.py, the ETL
 bridge) stays as the real-data **baseline** path, not the headline feature.
