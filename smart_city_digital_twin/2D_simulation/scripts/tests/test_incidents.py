@@ -17,7 +17,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import pytest  # noqa: E402
 
 from incidents import (  # noqa: E402
-    BLOCK_CLASSES,
+    BLOCK_SPEED,
     Incident,
     IncidentController,
     active_at,
@@ -78,7 +78,6 @@ class FakeLane:
     def __init__(self, ids, speed=13.9):
         self._ids = ids
         self.speed = {lid: speed for lid in ids}
-        self.disallowed = {}                 # nothing disallowed = open roads
         self.calls = []
 
     def getIDList(self):
@@ -91,35 +90,28 @@ class FakeLane:
         self.speed[lid] = v
         self.calls.append((lid, v))
 
-    def getDisallowed(self, lid):
-        return list(self.disallowed.get(lid, []))
-
-    def setDisallowed(self, lid, classes):
-        self.disallowed[lid] = list(classes)
-        self.calls.append((lid, "disallow", tuple(classes)))
-
 
 class FakeTraci:
     def __init__(self, lane_ids):
         self.lane = FakeLane(lane_ids)
 
 
-def test_close_edge_blocks_then_reopens():
+def test_close_edge_applies_then_reverts():
     tc = FakeTraci(["E1_0", "E1_1", "E2_0"])
     ctrl = IncidentController([Incident(type="close_edge", target="E1", start=100, end=200)],
                              log=lambda *a: None)
 
     ctrl.step(tc, 50)                    # before -> nothing changes
-    assert tc.lane.disallowed.get("E1_0", []) == []
+    assert tc.lane.speed["E1_0"] == pytest.approx(13.9)
 
     ctrl.step(tc, 100)                   # active -> both E1 lanes blocked, E2 untouched
-    assert tc.lane.disallowed["E1_0"] == BLOCK_CLASSES
-    assert tc.lane.disallowed["E1_1"] == BLOCK_CLASSES
-    assert tc.lane.disallowed.get("E2_0", []) == []
+    assert tc.lane.speed["E1_0"] == BLOCK_SPEED
+    assert tc.lane.speed["E1_1"] == BLOCK_SPEED
+    assert tc.lane.speed["E2_0"] == pytest.approx(13.9)
 
-    ctrl.step(tc, 200)                   # expired -> reopened (original empty disallowed)
-    assert tc.lane.disallowed["E1_0"] == []
-    assert tc.lane.disallowed["E1_1"] == []
+    ctrl.step(tc, 200)                   # expired -> restored to original
+    assert tc.lane.speed["E1_0"] == pytest.approx(13.9)
+    assert tc.lane.speed["E1_1"] == pytest.approx(13.9)
 
 
 def test_set_speed_uses_given_speed_and_restores():
@@ -137,8 +129,8 @@ def test_close_lane_only_touches_that_lane():
     ctrl = IncidentController([Incident(type="close_lane", target="E1_0", start=0)],
                              log=lambda *a: None)
     ctrl.step(tc, 0)
-    assert tc.lane.disallowed["E1_0"] == BLOCK_CLASSES
-    assert tc.lane.disallowed.get("E1_1", []) == []       # sibling lane stays open
+    assert tc.lane.speed["E1_0"] == BLOCK_SPEED
+    assert tc.lane.speed["E1_1"] == pytest.approx(13.9)   # sibling lane stays open
 
 
 def test_apply_is_idempotent_across_steps():
@@ -148,10 +140,10 @@ def test_apply_is_idempotent_across_steps():
     ctrl.step(tc, 0)
     ctrl.step(tc, 1)
     ctrl.step(tc, 2)
-    # only one block call (no re-apply, no lost original)
-    assert tc.lane.calls == [("E1_0", "disallow", tuple(BLOCK_CLASSES))]
+    # only one setMaxSpeed call to block (no re-apply, no lost original)
+    assert tc.lane.calls == [("E1_0", BLOCK_SPEED)]
     ctrl.step(tc, 100)
-    assert tc.lane.disallowed["E1_0"] == []
+    assert tc.lane.speed["E1_0"] == pytest.approx(13.9)
 
 
 if __name__ == "__main__":
