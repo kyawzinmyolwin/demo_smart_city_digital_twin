@@ -65,6 +65,16 @@ Decision-support increments (supersede the old scenario-comparison / alerts line
       overlay — absorbs the old "congestion alerts (15h)" item (~15–20h)
 - [ ] Inc 4: Impact metrics / reporting (added delay, queue length, affected area) (~10h)
 
+Future extension (deferred by choice, not scheduled yet):
+- [ ] Incident REROUTING / detours (~6–9h incl. on-VM tuning): when an edge is closed,
+      divert approaching traffic around it instead of queueing/crawling through. TraCI
+      `edge.adaptTraveltime(closed_edge, huge)` + `vehicle.rerouteTraveltime(v)` for vehicles
+      whose route still includes the edge, reset on revert; needs `--time-to-teleport -1`
+      (a `--no-teleport` passthrough in run_traci.py) so stuck cars divert instead of
+      teleporting through. NOT a proposal M4 feature — an enhancement to the incident hook;
+      considered and deliberately deferred (2026-09) to protect Inc 2 (the on-schedule,
+      proposal-committed scenario comparison) and the untouched M5. Do after Inc 3.
+
 Also queued: small deploy polish — ship `edges.geojson` via `deploy_dashboard.sh` so the
 road overlay works on the hosted CloudFront dashboard, not just locally (~1h).
 
