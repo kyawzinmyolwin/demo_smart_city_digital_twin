@@ -16,10 +16,13 @@ Design (matches the repo's pure-core / thin-glue split):
   tests drive it with a fake.
 
 Supported types (Increment 1):
-- ``close_edge`` / ``close_lane``  — block the road (max speed -> ~0), models a
-  crash. Vehicles queue upstream; congestion builds and is visible on the map.
+- ``close_edge`` / ``close_lane``  — fully CLOSE the road: disallow all road vehicle
+  classes on the lane(s) so vehicles can't enter and queue upstream (models a crash /
+  hard closure). Note: SUMO teleports vehicles jammed longer than --time-to-teleport
+  (default 300s) past the block, so for a *sustained* visible jam run SUMO with
+  --time-to-teleport -1.
 - ``set_speed``                    — lower the max speed on an edge/lane (roadworks
-  / temporary limit). ``close_*`` is just this with a near-zero speed.
+  / temporary limit) without closing it — vehicles still pass, slowly.
 - ``add_vehicles``                 — inject extra trips from one edge to another
   across the window (event surge). Best-effort routing via findRoute.
 
@@ -31,8 +34,17 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-# Near-zero speed used to model a full block (SUMO dislikes exactly 0).
+# Low speed used by set_speed's extreme; kept for the roadworks path.
 BLOCK_SPEED = 0.1
+
+# Vehicle classes disallowed to fully CLOSE a lane (a crash/closure): vehicles
+# can no longer enter it, so they queue upstream instead of crawling through.
+# Covers every road vClass in this net; reverted from the lane's saved disallowed set.
+BLOCK_CLASSES = [
+    "private", "emergency", "authority", "army", "vip", "passenger", "hov",
+    "taxi", "bus", "coach", "delivery", "truck", "trailer", "motorcycle",
+    "moped", "bicycle", "evehicle", "custom1", "custom2",
+]
 
 
 @dataclass
@@ -130,6 +142,7 @@ class IncidentController:
         self._incidents = list(incidents)
         self._applied: set[int] = set()          # indices of currently-applied incidents
         self._saved_speed: dict[int, dict[str, float]] = {}  # idx -> {lane_id: original speed}
+        self._saved_disallowed: dict[int, dict[str, list]] = {}  # idx -> {lane_id: orig disallowed}
         self._injected: dict[int, int] = {}       # add_vehicles idx -> vehicles injected so far
         self._veh_seq = 0
         self._log = log
@@ -156,6 +169,22 @@ class IncidentController:
             traci.lane.setMaxSpeed(lid, orig)
         self._saved_speed.pop(idx, None)
         self._log(f"incident OFF {inc.describe()} (restored)")
+
+    def _apply_block(self, traci, idx: int, inc: Incident) -> None:
+        """Fully close each lane: disallow all road classes so vehicles can't enter
+        (they queue upstream). Saves the original disallowed set to restore on expiry."""
+        saved: dict[str, list] = {}
+        for lid in self._lanes_of(traci, inc.target):
+            saved[lid] = list(traci.lane.getDisallowed(lid))
+            traci.lane.setDisallowed(lid, BLOCK_CLASSES)
+        self._saved_disallowed[idx] = saved
+        self._log(f"incident ON  {inc.describe()} ({len(saved)} lane(s) blocked)")
+
+    def _revert_block(self, traci, idx: int, inc: Incident) -> None:
+        for lid, orig in self._saved_disallowed.get(idx, {}).items():
+            traci.lane.setDisallowed(lid, orig)
+        self._saved_disallowed.pop(idx, None)
+        self._log(f"incident OFF {inc.describe()} (reopened)")
 
     def _inject_surge(self, traci, idx: int, inc: Incident, t: float) -> None:
         """Inject add_vehicles gradually so ``count`` are added across the window."""
@@ -196,11 +225,16 @@ class IncidentController:
                     self._inject_surge(traci, idx, inc, t)
                 continue
             if on and idx not in self._applied:
-                self._apply_speed(traci, idx, inc,
-                                  inc.speed if inc.type == "set_speed" else BLOCK_SPEED)
+                if inc.type == "set_speed":
+                    self._apply_speed(traci, idx, inc, inc.speed)
+                else:                                # close_edge / close_lane -> hard block
+                    self._apply_block(traci, idx, inc)
                 self._applied.add(idx)
             elif not on and idx in self._applied:
-                self._revert_speed(traci, idx, inc)
+                if inc.type == "set_speed":
+                    self._revert_speed(traci, idx, inc)
+                else:
+                    self._revert_block(traci, idx, inc)
                 self._applied.discard(idx)
 
     @property
