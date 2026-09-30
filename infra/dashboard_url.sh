@@ -15,7 +15,9 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 dash=$(terraform output -raw dashboard_url)
+ws=$(terraform output -raw websocket_url)
 counts=$(terraform output -raw counts_api_url)
 replay=$(terraform output -raw replay_api_url)
 
-printf '%s/intersection_map.html?counts=%s&replay=%s\n' "$dash" "$counts" "$replay"
+printf '%s/intersection_map.html?ws=%s&replay=%s&counts=%s&edges=/edges.geojson\n' \
+  "$dash" "$ws" "$replay" "$counts"
