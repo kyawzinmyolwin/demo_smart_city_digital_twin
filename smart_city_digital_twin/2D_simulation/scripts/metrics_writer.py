@@ -82,6 +82,7 @@ def _point(measurement: str, m: dict):
     p = (
         Point(measurement)
         .tag("simId", str(m.get("simId", "unknown")))
+        .tag("scenario_id", str(m.get("scenarioId", m.get("simId", "unknown"))))
         .field("vehicleCount", int(m["vehicleCount"]))
         .field("avgSpeed", float(m["avgSpeed"]))
         .field("congestionIndex", float(m["congestionIndex"]))

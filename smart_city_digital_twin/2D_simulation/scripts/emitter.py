@@ -26,7 +26,9 @@ from typing import Any, Iterable
 # the unit test) importable without the dependency installed.
 
 
-def serialize_vehicles(traci: Any, net: Any, sim_id: str) -> dict[str, Any]:
+def serialize_vehicles(
+    traci: Any, net: Any, sim_id: str, scenario_id: str | None = None
+) -> dict[str, Any]:
     """Build one JSON snapshot of every vehicle currently on the network.
 
     Parameters
@@ -38,6 +40,10 @@ def serialize_vehicles(traci: Any, net: Any, sim_id: str) -> dict[str, Any]:
         in rather than imported so this function stays SUMO-free and testable.
     sim_id:
         Scenario identifier echoed back to clients.
+    scenario_id:
+        Optional decision-support scenario name (e.g. ``baseline_am`` vs
+        ``crash_arterial``) used to tag stored metrics for side-by-side comparison.
+        Defaults to ``sim_id`` when not given, so the snapshot always carries one.
 
     Returns
     -------
@@ -65,6 +71,7 @@ def serialize_vehicles(traci: Any, net: Any, sim_id: str) -> dict[str, Any]:
     return {
         "tick": int(time.time() * 1000),          # wall-clock ms, for the client
         "simId": sim_id,
+        "scenarioId": scenario_id if scenario_id is not None else sim_id,
         "simTime": round(traci.simulation.getTime(), 3),
         "vehicleCount": len(vehicles),
         "vehicles": vehicles,

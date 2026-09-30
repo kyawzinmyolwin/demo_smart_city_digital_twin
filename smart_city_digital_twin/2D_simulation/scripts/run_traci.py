@@ -180,7 +180,7 @@ async def _run_emitting(traci, args, controller=None) -> None:
             # (a local client is connected, or we're forwarding to the cloud).
             local_wants = broadcaster is not None and broadcaster.client_count
             if step % args.emit_interval == 0 and (local_wants or forwarder is not None):
-                snapshot = serialize_vehicles(traci, net, args.sim_id)
+                snapshot = serialize_vehicles(traci, net, args.sim_id, args.scenario_id)
                 if local_wants:
                     await broadcaster.broadcast(to_json(snapshot))
                 if forwarder is not None:
@@ -288,6 +288,12 @@ def build_parser() -> argparse.ArgumentParser:
         "--sim-id",
         default=DEFAULT_SIM_ID,
         help=f"Scenario id echoed to clients (default: {DEFAULT_SIM_ID})",
+    )
+    p.add_argument(
+        "--scenario-id",
+        default=None,
+        help="Decision-support scenario name tagged onto stored metrics for side-by-side "
+        "comparison (e.g. baseline_am vs crash_arterial). Defaults to --sim-id.",
     )
     p.add_argument(
         "--emit-target",

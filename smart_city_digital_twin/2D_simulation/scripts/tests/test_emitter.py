@@ -70,6 +70,7 @@ def test_snapshot_shape_and_conversion():
     snap = serialize_vehicles(FakeTraci(), FakeNet(), sim_id="test-sim")
 
     assert snap["simId"] == "test-sim"
+    assert snap["scenarioId"] == "test-sim"      # defaults to sim_id when not given
     assert snap["simTime"] == 23460.1
     assert snap["vehicleCount"] == 2
     assert isinstance(snap["tick"], int)
@@ -85,6 +86,12 @@ def test_snapshot_shape_and_conversion():
     assert v1["accel"] == 0.2
     assert v1["type"] == "car"
     assert snap["vehicles"][1]["type"] == "bus"
+
+
+def test_scenario_id_overrides_default():
+    snap = serialize_vehicles(FakeTraci(), FakeNet(), sim_id="s", scenario_id="crash_arterial")
+    assert snap["simId"] == "s"
+    assert snap["scenarioId"] == "crash_arterial"
 
 
 def test_empty_network():
