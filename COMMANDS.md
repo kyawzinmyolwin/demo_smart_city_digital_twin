@@ -35,6 +35,7 @@ python scripts/run_traci.py --no-gui --jump-to 23400 --end 23430    # plain head
 | `--emit-interval N` | Emit every Nth step (default 1) |
 | `--emit-target WSS_URL` | Also forward each snapshot to a cloud WebSocket (API Gateway) |
 | `--sim-id ID` | Scenario id echoed to clients / used as a metrics tag |
+| `--scenario-id NAME` | Decision-support scenario name tagged onto stored metrics (`scenario_id`) for the compare view; defaults to `--sim-id` |
 | **Pacing** | |
 | `--real-time` | Pace to wall-clock so a light run is watchable (else runs flat-out) |
 | `--speed X` | Playback multiplier for `--real-time` (e.g. `10` = 10× real time) |
@@ -144,6 +145,22 @@ python scripts/metrics_writer.py --ws-url ws://localhost:8765
 python scripts/replay_server.py         # serves http://localhost:8788/metrics
 ```
 `replay_server.py`: `--influx-url`/`--org`/`--bucket`/`--token`, `--port`.
+Query params: `field`, `start`, `stop`, `every`, and `scenario` (filter by `scenario_id`,
+used by the compare view). e.g. `GET /metrics?field=avgSpeed&start=-1h&scenario=crash_arterial`.
+
+### Compare two scenarios (Increment 2)
+Run a baseline and an incident with the *same* window, tagged distinctly, then overlay them:
+```bash
+# baseline (no incident)
+python scripts/run_traci.py --no-gui --emit --emit-host 0.0.0.0 --real-time \
+  --jump-to 23400 --end 25200 --scenario-id baseline_am
+# incident (same window, one edge closed)
+python scripts/run_traci.py --no-gui --emit --emit-host 0.0.0.0 --real-time \
+  --jump-to 23400 --end 25200 --scenario-id crash_arterial --close-edge <id>@23700:24300
+```
+Run `metrics_writer.py` alongside each so both land in InfluxDB tagged by `scenario_id`.
+Then in the dashboard's **Compare scenarios** panel, enter the two names (e.g. `baseline_am`
+and `crash_arterial`), pick a field/range, and Compare — the two series overlay on one chart.
 
 ---
 
@@ -167,7 +184,8 @@ URL params:
 | `?counts=` | CCC counts query endpoint (ETL) |
 | `?edges=` | Road-overlay GeoJSON (from `edges_geojson.py`) |
 
-In the page: **Connect** (live vehicles) · **show roads** then click a road for its edge id.
+In the page: **Connect** (live vehicles) · **show roads** then click a road for its edge id ·
+**Compare scenarios** panel overlays two `scenario_id` runs (baseline vs incident).
 
 ---
 

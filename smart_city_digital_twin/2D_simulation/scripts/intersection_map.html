@@ -184,6 +184,32 @@
     </div>
 
     <div class="hist-block">
+      <strong>Compare scenarios</strong>
+      <div class="hist-controls">
+        <input type="text" id="cmp-a" placeholder="baseline_am" spellcheck="false"
+          style="width:110px;font-size:11px;font-family:ui-monospace,monospace;" />
+        <input type="text" id="cmp-b" placeholder="crash_arterial" spellcheck="false"
+          style="width:110px;font-size:11px;font-family:ui-monospace,monospace;" />
+      </div>
+      <div class="hist-controls">
+        <select id="cmp-field">
+          <option value="avgSpeed">Avg speed (km/h)</option>
+          <option value="congestionIndex">Congestion</option>
+          <option value="vehicleCount">Vehicles</option>
+        </select>
+        <select id="cmp-range">
+          <option value="-15m">15m</option>
+          <option value="-1h" selected>1h</option>
+          <option value="-6h">6h</option>
+          <option value="-24h">24h</option>
+        </select>
+        <button type="button" id="cmp-load">Compare</button>
+      </div>
+      <div class="hist-status" id="cmp-status">two scenario_id runs, baseline vs scenario</div>
+      <div class="chart-box"><canvas id="chart-cmp"></canvas></div>
+    </div>
+
+    <div class="hist-block">
       <strong>CCC intersection counts</strong>
       <div class="hist-controls">
         <select id="counts-intersection"><option value="">Intersection…</option></select>
@@ -987,6 +1013,76 @@
 
   const histLoadBtn = document.getElementById("hist-load");
   if (histLoadBtn) histLoadBtn.addEventListener("click", loadHistory);
+
+  // --- Compare view: two scenario_id runs overlaid (Increment 2b) -----------
+  let cmpChart = null;
+
+  async function fetchScenarioSeries(field, range, every, scenario) {
+    let url = REPLAY_URL + "?field=" + encodeURIComponent(field) +
+      "&start=" + encodeURIComponent(range) + "&scenario=" + encodeURIComponent(scenario);
+    if (every) url += "&every=" + every;
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error("HTTP " + resp.status);
+    return (await resp.json()).points || [];
+  }
+
+  async function loadCompare() {
+    const statusEl = document.getElementById("cmp-status");
+    if (typeof Chart === "undefined") { statusEl.textContent = "Chart.js not loaded"; return; }
+    const a = document.getElementById("cmp-a").value.trim();
+    const b = document.getElementById("cmp-b").value.trim();
+    if (!a || !b) { statusEl.textContent = "enter two scenario_id values"; return; }
+    const field = document.getElementById("cmp-field").value;
+    const range = document.getElementById("cmp-range").value;
+    const every = HIST_EVERY[range] || "";
+    statusEl.textContent = "loading…";
+    try {
+      const [ptsA, ptsB] = await Promise.all([
+        fetchScenarioSeries(field, range, every, a),
+        fetchScenarioSeries(field, range, every, b),
+      ]);
+      renderCompare(field, range, a, ptsA, b, ptsB);
+      statusEl.textContent = a + ": " + ptsA.length + " pts · " + b + ": " + ptsB.length + " pts";
+    } catch (err) {
+      statusEl.textContent = "fetch failed — is the replay server running?";
+    }
+  }
+
+  function renderCompare(field, range, nameA, ptsA, nameB, ptsB) {
+    const toKmh = field === "avgSpeed";
+    const val = function (p) { return toKmh ? Number((p.value * 3.6).toFixed(1)) : p.value; };
+    // Align on A's timestamps for labels; each dataset plots its own values.
+    const labels = (ptsA.length >= ptsB.length ? ptsA : ptsB)
+      .map(function (p) { return new Date(p.time).toLocaleTimeString(); });
+    if (cmpChart) cmpChart.destroy();
+    cmpChart = new Chart(document.getElementById("chart-cmp").getContext("2d"), {
+      type: "line",
+      data: {
+        labels: labels,
+        datasets: [
+          { label: nameA, data: ptsA.map(val), borderColor: "#0e7c72",
+            borderWidth: 1.5, pointRadius: 0, tension: 0.25, fill: false },
+          { label: nameB, data: ptsB.map(val), borderColor: "#dc2626",
+            borderWidth: 1.5, pointRadius: 0, tension: 0.25, fill: false },
+        ],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false, animation: false,
+        plugins: {
+          legend: { display: true, labels: { font: { size: 10 } } },
+          title: { display: true, text: (toKmh ? "avgSpeed (km/h)" : field) + " · " + range,
+                   font: { size: 11 } },
+        },
+        scales: {
+          x: { ticks: { maxTicksLimit: 4, font: { size: 9 } } },
+          y: { beginAtZero: true, ticks: { maxTicksLimit: 4, font: { size: 9 } } },
+        },
+      },
+    });
+  }
+
+  const cmpLoadBtn = document.getElementById("cmp-load");
+  if (cmpLoadBtn) cmpLoadBtn.addEventListener("click", loadCompare);
 
   // ---- CCC intersection counts (from the traffic-count ETL query API) -------
   // Historical Miovision turning counts, served by the query-traffic-counts
