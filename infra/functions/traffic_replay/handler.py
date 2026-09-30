@@ -32,6 +32,7 @@ INFLUXDB_SECRET_ARN = os.environ["INFLUXDB_SECRET_ARN"]
 ALLOWED_FIELDS = {"avgSpeed", "congestionIndex", "vehicleCount", "stoppedCount", "movingCount"}
 _RANGE_RE = re.compile(r"^(-?\d+[smhdwy]|now\(\)|now|\d{4}-\d{2}-\d{2}T[\d:.]+Z)$")
 _EVERY_RE = re.compile(r"^\d+[smhdw]$")
+_SCENARIO_RE = re.compile(r"^[A-Za-z0-9_.:-]{1,64}$")  # guards the Flux scenario_id filter
 
 _token = None
 
@@ -58,6 +59,7 @@ def lambda_handler(event, context):
     stop = params.get("stop", "now")
     field = params.get("field", "avgSpeed")
     every = params.get("every")
+    scenario_id = params.get("scenario")
 
     if field not in ALLOWED_FIELDS:
         return _resp(400, {"error": f"field must be one of {sorted(ALLOWED_FIELDS)}"})
@@ -67,6 +69,8 @@ def lambda_handler(event, context):
             return _resp(400, {"error": f"invalid {label}"})
     if every is not None and not _EVERY_RE.match(every):
         return _resp(400, {"error": "invalid every"})
+    if scenario_id is not None and not _SCENARIO_RE.match(scenario_id):
+        return _resp(400, {"error": "invalid scenario"})
 
     flux = (
         f'from(bucket: "{INFLUXDB_BUCKET}")\n'
@@ -74,6 +78,9 @@ def lambda_handler(event, context):
         f'  |> filter(fn: (r) => r._measurement == "traffic_metrics")\n'
         f'  |> filter(fn: (r) => r._field == "{field}")\n'
     )
+    if scenario_id:
+        # scenario_id validated by _SCENARIO_RE above — safe to interpolate.
+        flux += f'  |> filter(fn: (r) => r.scenario_id == "{scenario_id}")\n'
     if every:
         flux += f"  |> aggregateWindow(every: {every}, fn: mean, createEmpty: false)\n"
 
@@ -82,7 +89,7 @@ def lambda_handler(event, context):
     except urllib.error.HTTPError as exc:
         return _resp(exc.code, {"error": exc.read().decode("utf-8", "replace")})
 
-    return _resp(200, {"field": field, "points": _parse_csv(csv_text)})
+    return _resp(200, {"field": field, "scenario": scenario_id, "points": _parse_csv(csv_text)})
 
 
 def _query(flux):
