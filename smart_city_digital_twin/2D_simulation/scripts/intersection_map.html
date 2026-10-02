@@ -207,6 +207,7 @@
       </div>
       <div class="hist-status" id="cmp-status">two scenario_id runs, baseline vs scenario</div>
       <div class="chart-box"><canvas id="chart-cmp"></canvas></div>
+      <div class="hist-status" id="cmp-summary" style="margin-top:4px;"></div>
     </div>
 
     <div class="hist-block">
@@ -1043,9 +1044,42 @@
       ]);
       renderCompare(field, range, a, ptsA, b, ptsB);
       statusEl.textContent = a + ": " + ptsA.length + " pts · " + b + ": " + ptsB.length + " pts";
+      renderCompareSummary(field, a, ptsA, b, ptsB);
     } catch (err) {
       statusEl.textContent = "fetch failed — is the replay server running?";
+      document.getElementById("cmp-summary").textContent = "";
     }
+  }
+
+  function _mean(pts) {
+    if (!pts.length) return null;
+    return pts.reduce(function (s, p) { return s + p.value; }, 0) / pts.length;
+  }
+
+  // One-line quantified headline: mean of each run + the B-vs-A change, with a
+  // direction word that reads correctly per metric (slower/more-congested = worse).
+  function renderCompareSummary(field, nameA, ptsA, nameB, ptsB) {
+    const el = document.getElementById("cmp-summary");
+    const mA = _mean(ptsA), mB = _mean(ptsB);
+    if (mA === null || mB === null) { el.textContent = "not enough data to summarise"; return; }
+    const toKmh = field === "avgSpeed";
+    const unit = toKmh ? " km/h" : "";
+    const scale = toKmh ? 3.6 : 1;
+    const a = mA * scale, b = mB * scale;
+    const pct = mA === 0 ? null : ((mB - mA) / Math.abs(mA)) * 100;
+    // avgSpeed: a drop is worse. congestion/counts: a rise is worse.
+    const worseWhenUp = field !== "avgSpeed";
+    let verdict = "no change";
+    if (pct !== null && Math.abs(pct) >= 0.5) {
+      const rose = mB > mA;
+      verdict = (rose === worseWhenUp) ? "worse" : "better";
+    }
+    const label = toKmh ? "avg speed" : (field === "congestionIndex" ? "congestion" : field);
+    const fmt = function (v) { return (Math.round(v * 10) / 10) + unit; };
+    el.innerHTML = "<b>" + label + "</b>: " + esc(nameA) + " " + fmt(a) + " → " +
+      esc(nameB) + " " + fmt(b) +
+      (pct === null ? "" : "  (" + (pct >= 0 ? "+" : "") + pct.toFixed(0) + "%, " + verdict + ")") +
+      "  · mean over the selected range";
   }
 
   function renderCompare(field, range, nameA, ptsA, nameB, ptsB) {
