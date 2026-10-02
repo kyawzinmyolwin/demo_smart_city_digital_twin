@@ -151,6 +151,26 @@
         <code>?edges=&lt;url&gt;</code>.
       </div>
     </div>
+    <div class="live-block">
+      <strong>Congestion alerts</strong>
+      <label style="display:block;margin-top:6px;font-size:12px;">
+        <input type="checkbox" id="alerts-toggle" /> flag slow roads on the live feed
+      </label>
+      <div style="font-size:11px;margin-top:4px;">
+        speed &lt;
+        <input type="number" id="alerts-threshold" value="3" min="0" step="0.5"
+          style="width:46px;font-size:11px;" /> m/s for
+        <input type="number" id="alerts-ticks" value="5" min="1" step="1"
+          style="width:40px;font-size:11px;" /> ticks
+      </div>
+      <div class="hist-status" id="alerts-status">off — tick to enable</div>
+      <div id="alerts-list" style="font-size:11px;font-family:ui-monospace,monospace;max-height:140px;overflow:auto;"></div>
+      <div class="hint" style="margin-top:6px;">
+        Flags road segments whose mean speed stays below the threshold for N
+        consecutive ticks (live feed only). Tick <b>show roads</b> above too to
+        highlight the alerted segments in red on the map.
+      </div>
+    </div>
   </div>
   <div id="map"></div>
   <div class="charts-panel" id="charts-panel">
@@ -795,6 +815,7 @@
       }
       updateVehicles(data.vehicles);
       pushMetrics(data);
+      updateCongestion(data.vehicles);
     };
 
     ws.onerror = function () {
@@ -1210,6 +1231,7 @@
   const EDGES_URL = (new URLSearchParams(window.location.search).get("edges") || "").trim()
     || "../data/output/network/edges.geojson";
   const edgeGeoLayer = L.layerGroup();   // not added by default — roads are visually busy
+  const edgePolylines = {};              // edge id -> its Leaflet polyline (for congestion highlight)
   const edgesToggle = document.getElementById("edges-toggle");
   const edgesStatus = document.getElementById("edges-status");
   const edgesPick = document.getElementById("edges-pick");
@@ -1246,6 +1268,7 @@
         pl.bindTooltip(feat.properties.id + (feat.properties.name ? " · " + feat.properties.name : ""),
                        { sticky: true });
         edgeGeoLayer.addLayer(pl);
+        edgePolylines[feat.properties.id] = pl;
       });
       edgesLoaded = true;
       edgesSetStatus(feats.length + " roads — click one for its id");
@@ -1264,6 +1287,89 @@
       } else {
         map.removeLayer(edgeGeoLayer);
       }
+    });
+  }
+  // -------------------------------------------------------------------------
+
+  // --- Congestion alerts: flag edges slow for N consecutive live ticks (Inc 3) ---
+  const alertsToggle = document.getElementById("alerts-toggle");
+  const alertsStatus = document.getElementById("alerts-status");
+  const alertsList = document.getElementById("alerts-list");
+  const alertStreak = {};          // edge id -> consecutive ticks below threshold
+  const highlighted = {};          // edge id -> true while drawn red
+
+  function alertsEnabled() { return alertsToggle && alertsToggle.checked; }
+
+  /** Pure core: group live vehicle speeds by edge, update per-edge streaks, and
+   *  return the edges currently alerting (mean speed < threshold for >= ticks). */
+  function detectCongestion(vehicles, threshold, needTicks, streak) {
+    const byEdge = {};
+    (vehicles || []).forEach(function (v) {
+      if (!v.lane || v.speed == null) return;
+      const edge = String(v.lane).replace(/_[0-9]+$/, "");   // lane id -> edge id
+      if (edge.charAt(0) === ":") return;                     // skip internal edges
+      (byEdge[edge] = byEdge[edge] || []).push(Number(v.speed));
+    });
+    const alerts = [];
+    const seen = {};
+    Object.keys(byEdge).forEach(function (edge) {
+      seen[edge] = true;
+      const sp = byEdge[edge];
+      const mean = sp.reduce(function (s, x) { return s + x; }, 0) / sp.length;
+      streak[edge] = mean < threshold ? (streak[edge] || 0) + 1 : 0;
+      if (streak[edge] >= needTicks) alerts.push({ edge: edge, mean: mean, ticks: streak[edge], n: sp.length });
+    });
+    // edges with no vehicles this tick: clear (free-flowing / empty, not congested)
+    Object.keys(streak).forEach(function (edge) { if (!seen[edge]) streak[edge] = 0; });
+    alerts.sort(function (a, b) { return a.mean - b.mean; });   // worst first
+    return alerts;
+  }
+
+  function highlightAlerts(alerts) {
+    const nowAlert = {};
+    alerts.forEach(function (a) {
+      nowAlert[a.edge] = true;
+      const pl = edgePolylines[a.edge];
+      if (pl) { pl.setStyle({ color: "#dc2626", weight: 5, opacity: 0.9 }); highlighted[a.edge] = true; }
+    });
+    // reset edges that recovered
+    Object.keys(highlighted).forEach(function (edge) {
+      if (!nowAlert[edge]) {
+        const pl = edgePolylines[edge];
+        if (pl) pl.setStyle({ color: "#7c3aed", weight: 2, opacity: 0.6 });
+        delete highlighted[edge];
+      }
+    });
+  }
+
+  function updateCongestion(vehicles) {
+    if (!alertsEnabled()) return;
+    const threshold = parseFloat(document.getElementById("alerts-threshold").value) || 3;
+    const needTicks = parseInt(document.getElementById("alerts-ticks").value, 10) || 5;
+    const alerts = detectCongestion(vehicles, threshold, needTicks, alertStreak);
+    highlightAlerts(alerts);
+    if (!alerts.length) {
+      alertsStatus.textContent = "no congested segments";
+      alertsList.innerHTML = "";
+      return;
+    }
+    alertsStatus.textContent = alerts.length + " congested segment(s)";
+    alertsList.innerHTML = alerts.slice(0, 20).map(function (a) {
+      return "<div>" + esc(a.edge) + " — " + (Math.round(a.mean * 3.6 * 10) / 10) +
+        " km/h (" + a.ticks + " ticks, " + a.n + " veh)</div>";
+    }).join("");
+  }
+
+  function clearCongestion() {
+    Object.keys(alertStreak).forEach(function (k) { delete alertStreak[k]; });
+    highlightAlerts([]);                 // resets any red edges
+    alertsList.innerHTML = "";
+  }
+
+  if (alertsToggle) {
+    alertsToggle.addEventListener("change", function () {
+      if (alertsToggle.checked) { alertsStatus.textContent = "watching the live feed…"; }
+      else { clearCongestion(); alertsStatus.textContent = "off — tick to enable"; }
     });
   }
   // -------------------------------------------------------------------------
