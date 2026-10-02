@@ -25,7 +25,8 @@ import time
 from pathlib import Path
 
 from _sim_root import SIM_ROOT  # noqa: E402
-from emitter import Broadcaster, CloudForwarder, serialize_vehicles, serve, to_json
+from emitter import Broadcaster, ControlInbox, CloudForwarder, serialize_vehicles, serve, to_json
+from incidents import IncidentController, incident_from_control
 from sim_pipeline import SUMOCFG, setup_sumolib, sumo_bin
 
 # Earliest vehicle depart in data/output/demand/traffic_trips.routed.rou.xml (06:30).
@@ -153,9 +154,11 @@ async def _run_emitting(traci, args, controller=None) -> None:
     broadcaster = None
     server = None
     forwarder = None
+    inbox = None
     if args.emit:
         broadcaster = Broadcaster()
-        server = await serve(broadcaster, args.emit_host, args.emit_port)
+        inbox = ControlInbox()            # dashboard → here: live click-to-inject commands
+        server = await serve(broadcaster, args.emit_host, args.emit_port, inbox)
         print(f"Emitter live on ws://{args.emit_host}:{args.emit_port} (sim id: {args.sim_id})")
     if args.emit_target:
         forwarder = CloudForwarder(args.emit_target)
@@ -172,6 +175,18 @@ async def _run_emitting(traci, args, controller=None) -> None:
         print("Running simulation ...")
         while not _should_stop(traci, args):
             t = traci.simulation.getTime()
+            # Apply any live incident commands that arrived over the WebSocket.
+            if inbox is not None:
+                for cmd in inbox.drain():
+                    try:
+                        inc = incident_from_control(cmd, t)
+                    except Exception as exc:  # noqa: BLE001 - bad command shouldn't crash the sim
+                        print(f"ignoring live incident command {cmd!r}: {exc}", file=sys.stderr)
+                        continue
+                    if controller is None:
+                        controller = IncidentController([])
+                    controller.add(inc)
+                    print(f"live incident injected: {inc.describe()}")
             if controller is not None:
                 controller.step(traci, t)
             traci.simulationStep()
@@ -381,8 +396,6 @@ def main() -> int:
     controller = None
     incidents = _build_incidents(args)
     if incidents:
-        from incidents import IncidentController
-
         controller = IncidentController(incidents)
         print(f"Incidents scheduled: {controller.summary}")
 

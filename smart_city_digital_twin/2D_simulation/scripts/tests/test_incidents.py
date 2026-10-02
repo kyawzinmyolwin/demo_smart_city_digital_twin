@@ -21,6 +21,7 @@ from incidents import (  # noqa: E402
     Incident,
     IncidentController,
     active_at,
+    incident_from_control,
     parse_cli_incident,
     parse_incidents,
 )
@@ -144,6 +145,38 @@ def test_apply_is_idempotent_across_steps():
     assert tc.lane.calls == [("E1_0", BLOCK_SPEED)]
     ctrl.step(tc, 100)
     assert tc.lane.speed["E1_0"] == pytest.approx(13.9)
+
+
+def test_incident_from_control_close_edge_with_duration():
+    inc = incident_from_control({"action": "incident", "type": "close_edge",
+                                 "edge": "4891423", "duration": 600}, now=23400.0)
+    assert inc.type == "close_edge" and inc.target == "4891423"
+    assert inc.start == 23400.0 and inc.end == 24000.0 and inc.label == "live"
+
+
+def test_incident_from_control_no_duration_is_open_ended():
+    inc = incident_from_control({"type": "close_edge", "edge": "E1"}, now=100.0)
+    assert inc.start == 100.0 and inc.end is None
+
+
+def test_incident_from_control_rejects_bad_input():
+    import pytest as _pt
+    with _pt.raises(ValueError):
+        incident_from_control({"type": "add_vehicles", "edge": "E1"}, now=0)   # not a live type
+    with _pt.raises(ValueError):
+        incident_from_control({"type": "close_edge"}, now=0)                   # no target
+    with _pt.raises(ValueError):
+        incident_from_control({"type": "set_speed", "edge": "E1"}, now=0)      # no speed
+
+
+def test_controller_add_injects_at_runtime():
+    tc = FakeTraci(["E1_0"])
+    ctrl = IncidentController([], log=lambda *a: None)
+    ctrl.step(tc, 100)                                   # nothing scheduled yet
+    assert tc.lane.speed["E1_0"] == pytest.approx(13.9)
+    ctrl.add(incident_from_control({"type": "close_edge", "edge": "E1"}, now=100))
+    ctrl.step(tc, 101)                                   # live incident now applies
+    assert tc.lane.speed["E1_0"] == BLOCK_SPEED
 
 
 if __name__ == "__main__":

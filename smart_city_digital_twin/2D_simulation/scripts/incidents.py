@@ -99,6 +99,28 @@ def parse_incidents(data: dict[str, Any]) -> list[Incident]:
     return out
 
 
+def incident_from_control(cmd: dict[str, Any], now: float) -> Incident:
+    """Build a live incident from a dashboard control command at sim time ``now``.
+
+    ``cmd`` e.g. ``{"action":"incident","type":"close_edge","edge":"4891423","duration":600}``.
+    start = now (apply immediately); end = now+duration, or None (until run end) when no
+    duration. Supports the closure/speed family (add_vehicles isn't a live click action).
+    """
+    typ = str(cmd.get("type", "close_edge"))
+    if typ not in {"close_edge", "close_lane", "set_speed"}:
+        raise ValueError(f"unsupported live incident type {typ!r}")
+    target = str(cmd.get("edge", cmd.get("lane", cmd.get("target", "") or "")))
+    if not target:
+        raise ValueError("live incident needs an edge/lane target")
+    dur = cmd.get("duration")
+    end = now + float(dur) if dur not in (None, "", 0, "0") else None
+    speed = cmd.get("speed")
+    if typ == "set_speed" and speed is None:
+        raise ValueError("live set_speed needs a 'speed'")
+    return Incident(type=typ, target=target, start=float(now), end=end,
+                    speed=(float(speed) if speed is not None else None), label="live")
+
+
 def parse_cli_incident(s: str) -> Incident:
     """Parse a quick CLI closure: ``EDGE@START[:END]`` -> a close_edge incident.
 
@@ -125,6 +147,11 @@ class IncidentController:
     it becomes active (saving the state it changes) and reverts it when it expires
     (restoring that state). ``add_vehicles`` injects gradually across its window.
     """
+
+    def add(self, incident: Incident) -> None:
+        """Append an incident at runtime (live injection). step() picks it up on the
+        next tick by its new index — safe because applied-state is keyed by index."""
+        self._incidents.append(incident)
 
     def __init__(self, incidents: list[Incident], *, log=print) -> None:
         self._incidents = list(incidents)

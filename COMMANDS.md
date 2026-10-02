@@ -185,7 +185,13 @@ URL params:
 | `?edges=` | Road-overlay GeoJSON (from `edges_geojson.py`) |
 
 In the page: **Connect** (live vehicles) · **show roads** then click a road for its edge id ·
-**Compare scenarios** panel overlays two `scenario_id` runs (baseline vs incident).
+**Compare scenarios** panel overlays two `scenario_id` runs (baseline vs incident) ·
+**Congestion alerts** panel flags slow segments on the live feed.
+
+**Click-to-inject (live, local ws only):** while Connected to a local emitter
+(`run_traci.py --emit`, reachable in the browser), click a road → **Close live** closes
+that edge in the *running* sim for the chosen duration. Sent over the WebSocket; the cloud
+API Gateway path does not read these commands.
 
 ---
 

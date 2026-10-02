@@ -122,11 +122,31 @@ class Broadcaster:
             self.unregister(ws)
 
 
-async def serve(broadcaster: Broadcaster, host: str, port: int):
+class ControlInbox:
+    """A queue of inbound control commands from dashboard clients (e.g. "close this
+    edge now"). The WebSocket handler appends parsed commands; the stepping loop
+    drains them each tick and applies them to the live IncidentController. Kept
+    tiny and dependency-free so it's trivially testable."""
+
+    def __init__(self) -> None:
+        self._pending: list[dict[str, Any]] = []
+
+    def add(self, cmd: dict[str, Any]) -> None:
+        self._pending.append(cmd)
+
+    def drain(self) -> list[dict[str, Any]]:
+        out = self._pending
+        self._pending = []
+        return out
+
+
+async def serve(broadcaster: Broadcaster, host: str, port: int, inbox: "ControlInbox | None" = None):
     """Start the WebSocket server and return the running server object.
 
-    Each connection: send the current snapshot right away, then just hold the
-    socket open (we only push; clients don't send anything the emitter reads).
+    Each connection: send the current snapshot right away, then read inbound
+    frames. Clients normally send nothing; when ``inbox`` is given, frames of the
+    form ``{"action": "incident", ...}`` are queued for the stepping loop to apply
+    live (click-to-inject). Any other frame is ignored.
     """
     import websockets
 
@@ -135,7 +155,15 @@ async def serve(broadcaster: Broadcaster, host: str, port: int):
         try:
             if broadcaster.latest is not None:
                 await ws.send(broadcaster.latest)
-            await ws.wait_closed()
+            async for raw in ws:               # ends when the client disconnects
+                if inbox is None:
+                    continue
+                try:
+                    msg = json.loads(raw)
+                except Exception:               # noqa: BLE001 - ignore malformed control frames
+                    continue
+                if isinstance(msg, dict) and msg.get("action") == "incident":
+                    inbox.add(msg)
         finally:
             broadcaster.unregister(ws)
 

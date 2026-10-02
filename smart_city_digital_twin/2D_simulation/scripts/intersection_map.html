@@ -1239,15 +1239,35 @@
 
   function edgesSetStatus(msg) { if (edgesStatus) edgesStatus.textContent = msg; }
 
+  // Send a control command up the live WebSocket (local emitter only). Returns
+  // false if not connected. The cloud API Gateway path doesn't read these.
+  function sendControl(obj) {
+    if (!ws || ws.readyState !== WebSocket.OPEN) return false;
+    try { ws.send(JSON.stringify(obj)); return true; } catch (e) { return false; }
+  }
+
   function onEdgeClick(feat) {
     return function () {
       const id = feat.properties.id;
       const name = feat.properties.name || "(unnamed)";
       const cmd = "--close-edge " + id + "@23700:24300";
-      if (edgesPick) {
-        edgesPick.innerHTML = "<b>" + esc(id) + "</b> — " + esc(name) +
-          "<br><code>" + esc(cmd) + "</code>";
-      }
+      if (!edgesPick) return;
+      edgesPick.innerHTML = "<b>" + esc(id) + "</b> — " + esc(name) +
+        "<br><code>" + esc(cmd) + "</code>" +
+        '<div style="margin-top:4px;font-size:11px;">close live for ' +
+        '<input type="number" id="live-dur" value="600" min="0" step="60" style="width:56px;font-size:11px;" /> s ' +
+        '<button type="button" id="live-close">Close live</button></div>' +
+        '<div class="hist-status" id="live-status"></div>';
+      const btn = document.getElementById("live-close");
+      if (btn) btn.addEventListener("click", function () {
+        const dur = parseInt(document.getElementById("live-dur").value, 10);
+        const msg = { action: "incident", type: "close_edge", edge: id };
+        if (dur > 0) msg.duration = dur;
+        const ok = sendControl(msg);
+        document.getElementById("live-status").textContent = ok
+          ? "sent — closing " + id + (dur > 0 ? " for " + dur + "s" : " until run end")
+          : "not connected to a live emitter (Connect first; local ws only)";
+      });
     };
   }
 

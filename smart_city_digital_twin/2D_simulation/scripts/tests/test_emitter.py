@@ -15,7 +15,17 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from emitter import serialize_vehicles, to_json, wrap_sendmessage  # noqa: E402
+from emitter import ControlInbox, serialize_vehicles, to_json, wrap_sendmessage  # noqa: E402
+
+
+def test_control_inbox_add_and_drain():
+    box = ControlInbox()
+    assert box.drain() == []
+    box.add({"action": "incident", "type": "close_edge", "edge": "E1"})
+    box.add({"action": "incident", "type": "close_edge", "edge": "E2"})
+    out = box.drain()
+    assert [c["edge"] for c in out] == ["E1", "E2"]
+    assert box.drain() == []          # drain clears the queue
 
 
 class FakeVehicleDomain:
