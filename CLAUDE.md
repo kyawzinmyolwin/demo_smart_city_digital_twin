@@ -70,6 +70,13 @@ Decision-support increments (supersede the old scenario-comparison / alerts line
       IncidentController.add each tick). LOCAL ws path only; the cloud API Gateway control
       path is a separate larger build (see future extension). Absorbed the old "congestion
       alerts (15h)" item.
+      Part 2 refinements (wk of 3 Oct): the live button is a TOGGLE — "Close live" (open-ended)
+      ↔ "Reopen road (resume)", which sends {action:"reopen"} → IncidentController.reopen_all(t)
+      to lift the block WITHOUT stopping the sim (traffic recovers as the queue drains); the
+      dashboard shows the SIM CLOCK (HH:MM from snapshot simTime); and the Scenario-control panel
+      gained a "Start road block" field+button that takes the clicked edge id (validated,
+      --close-edge=<id>) and starts a fresh run with it closed from the run start (06:30), so a
+      non-IT user never types a sim-time or a command.
 - [x] GUI scenario control — DONE (wk of 3 Oct, scope addition for non-IT users).
       `control_server.py` (stdlib HTTP, port 8799) runs on the SUMO machine and spawns
       run_traci.py for NAMED PRESETS only (baseline_am / crash_arterial / roadworks in its

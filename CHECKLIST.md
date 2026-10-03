@@ -20,8 +20,8 @@ _Updated 2026-10-03._
 - [x] Scenario-tagged metrics (`--scenario-id` → InfluxDB tag, local + cloud)
 - [x] Compare view (baseline vs incident) + quantified summary line
 - [x] Congestion-alert overlay (slow-segment flagging + red highlight)
-- [x] Click-to-inject (local ws) — close a road live from the map
-- [x] GUI scenario control (`control_server.py` + panel) — start/stop from the browser, no CLI
+- [x] Click-to-inject (local ws) — close a road live from the map, with a **Close live ↔ Reopen road** toggle (block then resume in one run) + a visible sim clock
+- [x] GUI scenario control (`control_server.py` + panel) — start/stop from the browser, no CLI; **click a road → Start road block** (immediate close from 06:30)
 - [x] Cloud deploy wired (`deploy_dashboard.sh`: live feed, overlay, history, compare on hosted page)
 
 ## ⏳ To do
