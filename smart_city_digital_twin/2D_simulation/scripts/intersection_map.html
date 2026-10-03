@@ -111,6 +111,12 @@
     <div class="live-block">
       <strong>Scenario control</strong>
       <div id="scn-buttons" style="margin-top:6px;display:flex;flex-direction:column;gap:4px;"></div>
+      <div style="margin-top:8px;font-size:11px;">
+        <input type="text" id="scn-edge" placeholder="click a road, or type an edge id"
+          spellcheck="false"
+          style="width:100%;box-sizing:border-box;font-size:11px;font-family:ui-monospace,monospace;" />
+        <button type="button" id="scn-roadblock" style="margin-top:4px;">Start road block</button>
+      </div>
       <div style="margin-top:6px;">
         <button type="button" id="scn-stop" disabled>Stop</button>
       </div>
@@ -1265,6 +1271,9 @@
       const id = feat.properties.id;
       const name = feat.properties.name || "(unnamed)";
       const cmd = "--close-edge " + id + "@23700:24300";
+      // reflect the clicked edge into the Scenario control field (start a road block from it)
+      const scnEdge = document.getElementById("scn-edge");
+      if (scnEdge) scnEdge.value = id;
       if (!edgesPick) return;
       edgesPick.innerHTML = "<b>" + esc(id) + "</b> — " + esc(name) +
         "<br><code>" + esc(cmd) + "</code>" +
@@ -1476,6 +1485,24 @@
     clearTimeout(scnPollTimer);
     scnPollTimer = setTimeout(scnPoll, 3000);
   }
+
+  async function scnStartRoadblock() {
+    const edge = (document.getElementById("scn-edge").value || "").trim();
+    if (!edge) { scnSet("click a road on the map, or type an edge id, first"); return; }
+    scnSet("starting road block on " + edge + "…");
+    try {
+      const resp = await fetch(CONTROL_URL + "/start_roadblock?edge=" + encodeURIComponent(edge),
+                               { method: "POST" });
+      const data = await resp.json();
+      if (!data.ok) { scnSet("could not start: " + (data.error || resp.status)); return; }
+      scnSet("road block started on " + edge + " — connecting…");
+      setTimeout(function () { if (!ws) connectWs(); }, 2500);   // let the emitter bind first
+      scnPoll();
+    } catch (e) { scnSet("start failed — is the control server running?"); }
+  }
+
+  const scnRoadblockBtn = document.getElementById("scn-roadblock");
+  if (scnRoadblockBtn) scnRoadblockBtn.addEventListener("click", scnStartRoadblock);
 
   if (scnStop) scnStop.addEventListener("click", scnStopSim);
   scnInit();

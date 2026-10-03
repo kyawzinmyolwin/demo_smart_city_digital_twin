@@ -12,7 +12,13 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import pytest  # noqa: E402
 
-from control_server import PRESETS, SimRunner, build_command, scenario_list  # noqa: E402
+from control_server import (  # noqa: E402
+    PRESETS,
+    SimRunner,
+    build_command,
+    build_roadblock_command,
+    scenario_list,
+)
 
 
 class FakeProc:
@@ -93,6 +99,38 @@ def test_start_unknown_scenario_rejected():
     runner, created = _runner()
     r = runner.start("nope")
     assert r["ok"] is False and not created          # nothing spawned
+
+
+def test_build_roadblock_command_uses_attached_close_edge():
+    # a leading-dash (reverse-direction) edge must ride in the --close-edge=<...> form
+    cmd = build_roadblock_command("-1015728520#1", duration=600, script_dir="/x")
+    assert cmd[1].endswith("run_traci.py")
+    assert "--close-edge=-1015728520#1@23700:24300" in cmd
+    assert "--scenario-id" in cmd and "roadblock" in cmd
+    # no bare "--close-edge" token that argparse could mis-bind
+    assert "--close-edge" not in cmd
+
+
+def test_build_roadblock_open_ended_without_duration():
+    cmd = build_roadblock_command("4891423", script_dir="/x")
+    assert "--close-edge=4891423@23700" in cmd       # no ':end' when no duration
+
+
+def test_roadblock_rejects_bad_edge():
+    import pytest as _pt
+    with _pt.raises(ValueError):
+        build_roadblock_command("bad edge@evil")       # space + '@'
+    runner, created = _runner()
+    r = runner.start_roadblock("has space")
+    assert r["ok"] is False and not created            # nothing spawned
+
+
+def test_start_roadblock_lifecycle():
+    runner, created = _runner()
+    r = runner.start_roadblock("770109405#0", duration=600)
+    assert r["ok"] is True and r["edge"] == "770109405#0"
+    assert runner.running() is True
+    assert "roadblock" in runner.status()["scenario"]
 
 
 if __name__ == "__main__":

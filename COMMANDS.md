@@ -171,9 +171,13 @@ control** panel can start/stop the sim with a click (no command line).
 ```bash
 python scripts/control_server.py            # serves http://localhost:8799
 ```
-It only starts **named presets** (baseline / crash / roadworks — editable in the
-`PRESETS` registry at the top of the file), never arbitrary args. Endpoints:
-`GET /scenarios`, `GET /status`, `POST /start?scenario=<id>`, `POST /stop`.
+It starts **named presets** (baseline / crash / roadworks — editable in the `PRESETS`
+registry) and a **road block on a chosen edge**. Endpoints: `GET /scenarios`,
+`GET /status`, `POST /start?scenario=<id>`, `POST /start_roadblock?edge=<id>[&duration=<s>]`,
+`POST /stop`. The edge id is validated (letters/digits/`_.#:` + optional leading `-`) and
+passed as `--close-edge=<id>` so it can't become a stray flag; no arbitrary args reach the shell.
+In the dashboard's **Scenario control** panel, click a road on the map (its id fills the box)
+and hit **Start road block** — no command line.
 The dashboard reads it via `?control=<url>` (default `http://localhost:8799`); after
 Start it auto-connects the live feed. Local/VM use only — it spawns processes, so run
 it on a trusted machine, and the hosted CloudFront page can't reach a localhost server.

@@ -26,6 +26,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -34,6 +35,13 @@ from urllib.parse import parse_qs, urlparse
 
 SCRIPTS_DIR = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_PORT = 8799
+
+# A SUMO edge id: letters/digits and _ . # : with an optional leading '-' (reverse
+# direction). No '@' or spaces — the window suffix is added by us, not the user. This
+# guards the value that goes into the spawned command (passed as --close-edge=<id> so a
+# leading '-' can't be read as a flag; Popen uses an arg list, so there's no shell either).
+_EDGE_RE = re.compile(r"^-?[A-Za-z0-9_.#:]{1,80}$")
+ROADBLOCK_AT = 23700          # default closure start (06:35, just after the 06:30 demand start)
 
 # Preset scenarios a browser user can start. Each maps to a *fixed* run_traci.py
 # argument list (no user-supplied args reach the shell). Edit the edge id / window
@@ -75,6 +83,22 @@ def build_command(scenario: str, *, python: str | None = None, script_dir: str =
     return [py, os.path.join(script_dir, "run_traci.py")] + list(PRESETS[scenario]["args"])
 
 
+def build_roadblock_command(edge: str, *, at: int = ROADBLOCK_AT, duration: int | None = None,
+                            python: str | None = None, script_dir: str = SCRIPTS_DIR) -> list[str]:
+    """run_traci.py command that closes a user-chosen ``edge`` from a fresh run.
+
+    ``edge`` must match _EDGE_RE (validated here too, not just at the HTTP layer).
+    Passed as ``--close-edge=<edge>@<at>[:<at+duration>]`` so a leading '-' edge id
+    isn't parsed as a flag.
+    """
+    if not _EDGE_RE.match(edge or ""):
+        raise ValueError(f"invalid edge id {edge!r}")
+    window = f"{edge}@{at}" + (f":{at + int(duration)}" if duration else "")
+    py = python or sys.executable
+    return ([py, os.path.join(script_dir, "run_traci.py")] + list(_COMMON)
+            + ["--scenario-id", "roadblock", f"--close-edge={window}"])
+
+
 class SimRunner:
     """Owns at most one run_traci.py subprocess (start / stop / status)."""
 
@@ -99,6 +123,19 @@ class SimRunner:
         self._scenario = scenario
         self._started_at = time.time()
         return {"ok": True, "scenario": scenario, "pid": getattr(self._proc, "pid", None)}
+
+    def start_roadblock(self, edge: str, *, duration: int | None = None) -> dict:
+        """Start a fresh run with ``edge`` closed (the map 'Start road block' button)."""
+        if not _EDGE_RE.match(edge or ""):
+            return {"ok": False, "error": f"invalid edge id {edge!r}"}
+        if self.running():
+            return {"ok": False, "error": f"already running {self._scenario!r}; stop it first"}
+        cmd = build_roadblock_command(edge, duration=duration, script_dir=self._script_dir)
+        self._proc = self._popen(cmd, cwd=os.path.dirname(self._script_dir))
+        self._scenario = f"roadblock:{edge}"
+        self._started_at = time.time()
+        return {"ok": True, "scenario": self._scenario, "edge": edge,
+                "pid": getattr(self._proc, "pid", None)}
 
     def stop(self) -> dict:
         if not self.running():
@@ -154,6 +191,16 @@ def make_handler(runner: SimRunner):
             if path == "/start":
                 scenario = (parse_qs(parsed.query).get("scenario", [""])[0]).strip()
                 result = runner.start(scenario)
+                return self._send(200 if result.get("ok") else 400, result)
+            if path == "/start_roadblock":
+                q = parse_qs(parsed.query)
+                edge = (q.get("edge", [""])[0]).strip()
+                raw = q.get("duration", [None])[0]
+                try:
+                    duration = int(raw) if raw not in (None, "", "0") else None
+                except ValueError:
+                    return self._send(400, {"ok": False, "error": "bad duration"})
+                result = runner.start_roadblock(edge, duration=duration)
                 return self._send(200 if result.get("ok") else 400, result)
             if path == "/stop":
                 return self._send(200, runner.stop())
