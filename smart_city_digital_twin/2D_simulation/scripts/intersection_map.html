@@ -109,6 +109,20 @@
     </div>
     <input type="file" id="file-csv" accept=".csv,text/csv" style="margin-top:8px;font-size:11px;max-width:100%;" />
     <div class="live-block">
+      <strong>Scenario control</strong>
+      <div id="scn-buttons" style="margin-top:6px;display:flex;flex-direction:column;gap:4px;"></div>
+      <div style="margin-top:6px;">
+        <button type="button" id="scn-stop" disabled>Stop</button>
+      </div>
+      <div class="hist-status" id="scn-status">set ?control=&lt;url&gt; to enable</div>
+      <div class="hint" style="margin-top:6px;">
+        Starts/stops the simulation from here (no command line) via the control
+        server (<code>control_server.py</code>). Pick a scenario, then it connects
+        automatically to show the live traffic. Override the endpoint with
+        <code>?control=&lt;url&gt;</code> (default <code>http://localhost:8799</code>).
+      </div>
+    </div>
+    <div class="live-block">
       <strong>Live simulation</strong>
       <span id="ws-status" class="down">disconnected</span> ·
       <span id="veh-count">0</span> vehicles
@@ -1392,6 +1406,79 @@
       else { clearCongestion(); alertsStatus.textContent = "off — tick to enable"; }
     });
   }
+  // -------------------------------------------------------------------------
+
+  // --- Scenario control: start/stop the sim from the browser (control_server) ---
+  const CONTROL_URL = (new URLSearchParams(window.location.search).get("control") || "").trim()
+    || "http://localhost:8799";
+  const scnButtons = document.getElementById("scn-buttons");
+  const scnStop = document.getElementById("scn-stop");
+  const scnStatus = document.getElementById("scn-status");
+  let scnPollTimer = null;
+
+  function scnSet(msg) { if (scnStatus) scnStatus.textContent = msg; }
+
+  async function scnInit() {
+    try {
+      const resp = await fetch(CONTROL_URL + "/scenarios");
+      if (!resp.ok) throw new Error("HTTP " + resp.status);
+      const data = await resp.json();
+      (data.scenarios || []).forEach(function (s) {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.textContent = "Start: " + s.label;
+        b.title = s.description || "";
+        b.addEventListener("click", function () { scnStart(s.id); });
+        scnButtons.appendChild(b);
+      });
+      scnSet("pick a scenario to start");
+      scnPoll();
+    } catch (e) {
+      scnSet("control server not reachable (run control_server.py, or set ?control=<url>)");
+    }
+  }
+
+  async function scnStart(id) {
+    scnSet("starting " + id + "…");
+    try {
+      const resp = await fetch(CONTROL_URL + "/start?scenario=" + encodeURIComponent(id), { method: "POST" });
+      const data = await resp.json();
+      if (!data.ok) { scnSet("could not start: " + (data.error || resp.status)); return; }
+      scnSet("started " + id + " — connecting…");
+      setTimeout(function () { if (!ws) connectWs(); }, 2500);   // let the emitter bind first
+      scnPoll();
+    } catch (e) { scnSet("start failed — is the control server running?"); }
+  }
+
+  async function scnStopSim() {
+    scnSet("stopping…");
+    try {
+      await fetch(CONTROL_URL + "/stop", { method: "POST" });
+      scnSet("stopped");
+      scnPoll();
+    } catch (e) { scnSet("stop failed"); }
+  }
+
+  async function scnPoll() {
+    try {
+      const resp = await fetch(CONTROL_URL + "/status");
+      const st = await resp.json();
+      if (st.running) {
+        scnSet("running " + st.scenario + " (" + Math.round(st.uptimeSec) + "s)");
+        if (scnStop) scnStop.disabled = false;
+      } else {
+        if (scnStop) scnStop.disabled = true;
+        if (scnStatus && scnStatus.textContent.indexOf("not reachable") === -1) {
+          scnSet("idle — pick a scenario to start");
+        }
+      }
+    } catch (e) { /* control server gone — keep the last message */ }
+    clearTimeout(scnPollTimer);
+    scnPollTimer = setTimeout(scnPoll, 3000);
+  }
+
+  if (scnStop) scnStop.addEventListener("click", scnStopSim);
+  scnInit();
   // -------------------------------------------------------------------------
 
   loadFromFetch().catch(function () {

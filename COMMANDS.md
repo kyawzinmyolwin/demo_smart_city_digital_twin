@@ -164,6 +164,20 @@ and `crash_arterial`), pick a field/range, and Compare — the two series overla
 
 ---
 
+## 5b. Start/stop scenarios from the browser — `control_server.py`
+
+For a non-IT user: run this on the machine with SUMO so the dashboard's **Scenario
+control** panel can start/stop the sim with a click (no command line).
+```bash
+python scripts/control_server.py            # serves http://localhost:8799
+```
+It only starts **named presets** (baseline / crash / roadworks — editable in the
+`PRESETS` registry at the top of the file), never arbitrary args. Endpoints:
+`GET /scenarios`, `GET /status`, `POST /start?scenario=<id>`, `POST /stop`.
+The dashboard reads it via `?control=<url>` (default `http://localhost:8799`); after
+Start it auto-connects the live feed. Local/VM use only — it spawns processes, so run
+it on a trusted machine, and the hosted CloudFront page can't reach a localhost server.
+
 ## 6. Dashboard — `intersection_map.html`
 
 Serve from **`2D_simulation/`** (so `../data` paths resolve), open `/scripts/…`:
@@ -183,6 +197,7 @@ URL params:
 | `?replay=` | History/compare read endpoint (default `http://localhost:8788/metrics`) |
 | `?counts=` | CCC counts query endpoint (ETL) |
 | `?edges=` | Road-overlay GeoJSON (from `edges_geojson.py`) |
+| `?control=` | Scenario control server (start/stop the sim from the browser; default `http://localhost:8799`) |
 
 In the page: **Connect** (live vehicles) · **show roads** then click a road for its edge id ·
 **Compare scenarios** panel overlays two `scenario_id` runs (baseline vs incident) ·
