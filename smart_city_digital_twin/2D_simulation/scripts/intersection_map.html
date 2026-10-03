@@ -131,7 +131,8 @@
     <div class="live-block">
       <strong>Live simulation</strong>
       <span id="ws-status" class="down">disconnected</span> ·
-      <span id="veh-count">0</span> vehicles
+      <span id="veh-count">0</span> vehicles ·
+      sim time <span id="sim-clock">—</span>
       <input type="text" id="ws-url" spellcheck="false"
         style="margin-top:8px;width:100%;box-sizing:border-box;font-size:11px;font-family:ui-monospace,monospace;"
         placeholder="ws://localhost:8765" />
@@ -723,6 +724,17 @@
     wsStatusEl.className = isLive ? "live" : "down";
   }
 
+  // Sim time is seconds-since-midnight; show it as HH:MM so the user can see the
+  // clock (e.g. a road block from 06:30 is obvious rather than a hidden sim-second).
+  function updateSimClock(simTime) {
+    const el = document.getElementById("sim-clock");
+    if (!el || simTime == null) return;
+    const s = Math.floor(Number(simTime)) % 86400;
+    const hh = String(Math.floor(s / 3600)).padStart(2, "0");
+    const mm = String(Math.floor((s % 3600) / 60)).padStart(2, "0");
+    el.textContent = hh + ":" + mm;
+  }
+
   function colorForSpeed(speed) {
     if (speed == null || !isFinite(speed)) return "#64748b";
     if (speed < SPEED_SLOW) return "#dc2626";
@@ -836,6 +848,7 @@
       updateVehicles(data.vehicles);
       pushMetrics(data);
       updateCongestion(data.vehicles);
+      updateSimClock(data.simTime);
     };
 
     ws.onerror = function () {
@@ -1495,7 +1508,7 @@
                                { method: "POST" });
       const data = await resp.json();
       if (!data.ok) { scnSet("could not start: " + (data.error || resp.status)); return; }
-      scnSet("road block started on " + edge + " — connecting…");
+      scnSet("road block on " + edge + " (closed from the start, 06:30) — connecting…");
       setTimeout(function () { if (!ws) connectWs(); }, 2500);   // let the emitter bind first
       scnPoll();
     } catch (e) { scnSet("start failed — is the control server running?"); }

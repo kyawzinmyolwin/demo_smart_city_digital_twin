@@ -102,10 +102,11 @@ def test_start_unknown_scenario_rejected():
 
 
 def test_build_roadblock_command_uses_attached_close_edge():
-    # a leading-dash (reverse-direction) edge must ride in the --close-edge=<...> form
+    # a leading-dash (reverse-direction) edge must ride in the --close-edge=<...> form;
+    # the block starts at the run's jump-to (23400) so it's active immediately
     cmd = build_roadblock_command("-1015728520#1", duration=600, script_dir="/x")
     assert cmd[1].endswith("run_traci.py")
-    assert "--close-edge=-1015728520#1@23700:24300" in cmd
+    assert "--close-edge=-1015728520#1@23400:24000" in cmd
     assert "--scenario-id" in cmd and "roadblock" in cmd
     # no bare "--close-edge" token that argparse could mis-bind
     assert "--close-edge" not in cmd
@@ -113,7 +114,7 @@ def test_build_roadblock_command_uses_attached_close_edge():
 
 def test_build_roadblock_open_ended_without_duration():
     cmd = build_roadblock_command("4891423", script_dir="/x")
-    assert "--close-edge=4891423@23700" in cmd       # no ':end' when no duration
+    assert "--close-edge=4891423@23400" in cmd       # from run start, no ':end' when no duration
 
 
 def test_roadblock_rejects_bad_edge():

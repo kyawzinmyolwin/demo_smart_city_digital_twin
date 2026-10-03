@@ -41,7 +41,10 @@ DEFAULT_PORT = 8799
 # guards the value that goes into the spawned command (passed as --close-edge=<id> so a
 # leading '-' can't be read as a flag; Popen uses an arg list, so there's no shell either).
 _EDGE_RE = re.compile(r"^-?[A-Za-z0-9_.#:]{1,80}$")
-ROADBLOCK_AT = 23700          # default closure start (06:35, just after the 06:30 demand start)
+# Close from the run's start (06:30 = the --jump-to in _COMMON) so a click blocks the road
+# immediately — a non-IT user shouldn't have to know a sim-time or wait for a hidden trigger.
+# Keep this equal to the --jump-to value in _COMMON.
+ROADBLOCK_AT = 23400
 
 # Preset scenarios a browser user can start. Each maps to a *fixed* run_traci.py
 # argument list (no user-supplied args reach the shell). Edit the edge id / window
