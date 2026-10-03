@@ -52,18 +52,27 @@ Decision-support increments (supersede the old scenario-comparison / alerts line
       `--incident-file`/`--close-edge`. Plus supporting tooling: ETL→scenario data bridge
       (`scenario_bridge.py`, `fetch_counts_for_date.py`), edge-picking helpers
       (`list_edges.py`, `edges_geojson.py`) and a clickable edge overlay on the dashboard.
-- [ ] Inc 2: Scenario metrics + compare view ← NEXT (this is next week's plan):
-      (a) capture each scenario's metrics into InfluxDB TAGGED BY SCENARIO NAME (avg speed,
-          vehicle counts, congestion) — introduce a `scenario_id` tying a named run to its
-          config + incident spec + metrics (metrics_writer.py currently tags only `simId`);
-      (b) add a dashboard COMPARE VIEW showing a baseline run vs one scenario side by side;
-      (c) write a short design note first: the 2–3 concrete scenarios to model + what
-          "success" is for each (keep runs identical apart from the one changed variable).
-      Absorbs the old "scenario comparison (30h)" item (~15–20h).
-- [ ] Inc 3: Dashboard controls (click a road on the map to INJECT the incident live —
-      the back half of the edge overlay; browser → control path → sim host) + congestion-alert
-      overlay — absorbs the old "congestion alerts (15h)" item (~15–20h)
-- [ ] Inc 4: Impact metrics / reporting (added delay, queue length, affected area) (~10h)
+- [x] Inc 2: Scenario metrics + compare view — DONE (wk of 30 Sep).
+      (a) `scenario_id` tagged end-to-end: run_traci `--scenario-id` → emitter snapshot →
+          compute_tick_metrics → scenario_id InfluxDB tag (local metrics_writer AND the cloud
+          metrics Lambda, kept in sync);
+      (b) dashboard COMPARE VIEW overlays two scenario_id runs (baseline vs incident), backed
+          by a validated `scenario` filter on replay_server.py and the traffic-replay Lambda,
+          plus a quantified summary line (mean of each + % change, directional);
+      (c) design note at scripts/scenarios/DECISION_SUPPORT_DESIGN.md.
+      Absorbed the old "scenario comparison (30h)" item.
+- [x] Inc 3: Dashboard controls + congestion-alert overlay — DONE (wk of 2 Oct).
+      Part 1: "Congestion alerts" panel flags segments slow (speed < threshold) for N
+      consecutive live ticks; lists them and highlights them red on the road overlay
+      (folds in the deferred threshold-metrics-panel idea).
+      Part 2: local-ws CLICK-TO-INJECT — click a road → "Close live" closes that edge in the
+      running sim (emitter ControlInbox + inbound WS read → incident_from_control →
+      IncidentController.add each tick). LOCAL ws path only; the cloud API Gateway control
+      path is a separate larger build (see future extension). Absorbed the old "congestion
+      alerts (15h)" item.
+- [ ] Inc 4: Impact metrics / reporting (added delay, queue length, affected area) (~10h) ← NEXT
+      The full version of what Inc 2's compare summary line previews (windowed to the incident
+      period, not a whole-range mean).
 
 Future extension (deferred by choice, not scheduled yet):
 - [ ] Incident REROUTING / detours (~6–9h incl. on-VM tuning): when an edge is closed,
@@ -73,10 +82,15 @@ Future extension (deferred by choice, not scheduled yet):
       (a `--no-teleport` passthrough in run_traci.py) so stuck cars divert instead of
       teleporting through. NOT a proposal M4 feature — an enhancement to the incident hook;
       considered and deliberately deferred (2026-09) to protect Inc 2 (the on-schedule,
-      proposal-committed scenario comparison) and the untouched M5. Do after Inc 3.
+      proposal-committed scenario comparison) and the untouched M5. Do after Inc 3 (now done).
+- [ ] Cloud control path for click-to-inject: Inc 3's click-to-inject is local-ws only;
+      driving it over the deployed cloud dashboard needs a control route + the producer
+      holding an inbound connection. Larger build, deferred.
 
-Also queued: small deploy polish — ship `edges.geojson` via `deploy_dashboard.sh` so the
-road overlay works on the hosted CloudFront dashboard, not just locally (~1h).
+Deploy polish — DONE: `deploy_dashboard.sh` now ships `edges.geojson` and prints the
+fully-wired URL (ws + replay + counts + edges); `dashboard_url.sh` matches. The hosted
+dashboard serves live vehicles, the road overlay, history and the compare view (the old
+replay-URL 403 is gone — `?replay=` uses the API Gateway endpoint, not the Function URL).
 
 Deferred / de-prioritised by the pivot:
 - [~] Historical replay scrub bar (25h) — counts replay is now the baseline, not a headline
