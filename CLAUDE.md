@@ -70,6 +70,16 @@ Decision-support increments (supersede the old scenario-comparison / alerts line
       IncidentController.add each tick). LOCAL ws path only; the cloud API Gateway control
       path is a separate larger build (see future extension). Absorbed the old "congestion
       alerts (15h)" item.
+- [x] GUI scenario control — DONE (wk of 3 Oct, scope addition for non-IT users).
+      `control_server.py` (stdlib HTTP, port 8799) runs on the SUMO machine and spawns
+      run_traci.py for NAMED PRESETS only (baseline_am / crash_arterial / roadworks in its
+      PRESETS registry) — never arbitrary args, so the spawn endpoint stays safe. Endpoints:
+      /scenarios, /status, POST /start?scenario=, POST /stop; one sim at a time. Dashboard
+      "Scenario control" panel (Start buttons + Stop + status) drives it via `?control=`
+      (default http://localhost:8799) and auto-connects the live feed after Start — so a
+      non-IT user runs the whole thing from the browser, no command line. 5 unit tests
+      (fake Popen). LOCAL/VM only (spawns processes; hosted CloudFront can't reach a
+      localhost control server — a cloud start/stop via API Gateway + SSM is a later build).
 - [ ] Inc 4: Impact metrics / reporting (added delay, queue length, affected area) (~10h) ← NEXT
       The full version of what Inc 2's compare summary line previews (windowed to the incident
       period, not a whole-range mean).
