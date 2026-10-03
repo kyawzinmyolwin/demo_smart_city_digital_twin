@@ -144,11 +144,14 @@ async def serve(broadcaster: Broadcaster, host: str, port: int, inbox: "ControlI
     """Start the WebSocket server and return the running server object.
 
     Each connection: send the current snapshot right away, then read inbound
-    frames. Clients normally send nothing; when ``inbox`` is given, frames of the
-    form ``{"action": "incident", ...}`` are queued for the stepping loop to apply
-    live (click-to-inject). Any other frame is ignored.
+    frames. Clients normally send nothing; when ``inbox`` is given, control frames are
+    queued for the stepping loop: ``{"action": "incident", ...}`` to close a road live
+    and ``{"action": "reopen"}`` to lift active closures (the live Reopen toggle). Any
+    other frame is ignored.
     """
     import websockets
+
+    _CONTROL_ACTIONS = {"incident", "reopen"}
 
     async def handler(ws: Any) -> None:
         broadcaster.register(ws)
@@ -162,7 +165,7 @@ async def serve(broadcaster: Broadcaster, host: str, port: int, inbox: "ControlI
                     msg = json.loads(raw)
                 except Exception:               # noqa: BLE001 - ignore malformed control frames
                     continue
-                if isinstance(msg, dict) and msg.get("action") == "incident":
+                if isinstance(msg, dict) and msg.get("action") in _CONTROL_ACTIONS:
                     inbox.add(msg)
         finally:
             broadcaster.unregister(ws)

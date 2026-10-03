@@ -179,5 +179,21 @@ def test_controller_add_injects_at_runtime():
     assert tc.lane.speed["E1_0"] == BLOCK_SPEED
 
 
+def test_reopen_all_lifts_live_block():
+    tc = FakeTraci(["E1_0"])
+    ctrl = IncidentController([], log=lambda *a: None)
+    ctrl.add(incident_from_control({"type": "close_edge", "edge": "E1"}, now=100))  # open-ended
+    ctrl.step(tc, 101)
+    assert tc.lane.speed["E1_0"] == BLOCK_SPEED          # blocked
+
+    n = ctrl.reopen_all(now=200)                         # the live "Reopen"
+    assert n == 1
+    ctrl.step(tc, 201)                                   # next tick reverts it
+    assert tc.lane.speed["E1_0"] == pytest.approx(13.9)  # road restored, sim still running
+
+    n2 = ctrl.reopen_all(now=300)                        # nothing left to lift
+    assert n2 == 0
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-v"]))

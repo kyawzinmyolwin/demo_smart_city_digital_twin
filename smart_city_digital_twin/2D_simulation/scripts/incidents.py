@@ -153,6 +153,19 @@ class IncidentController:
         next tick by its new index — safe because applied-state is keyed by index."""
         self._incidents.append(incident)
 
+    def reopen_all(self, now: float) -> int:
+        """Lift every still-active incident without stopping the sim (the live 'Reopen').
+
+        Sets each active incident's end to ``now`` so the next ``step`` reverts it
+        (restoring the lane / speed). Returns how many were lifted. Traffic then
+        recovers on its own as the queue drains — we don't force anything."""
+        n = 0
+        for inc in self._incidents:
+            if inc.end is None or inc.end > now:
+                inc.end = now
+                n += 1
+        return n
+
     def __init__(self, incidents: list[Incident], *, log=print) -> None:
         self._incidents = list(incidents)
         self._applied: set[int] = set()          # indices of currently-applied incidents

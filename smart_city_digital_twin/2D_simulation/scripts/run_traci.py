@@ -175,9 +175,13 @@ async def _run_emitting(traci, args, controller=None) -> None:
         print("Running simulation ...")
         while not _should_stop(traci, args):
             t = traci.simulation.getTime()
-            # Apply any live incident commands that arrived over the WebSocket.
+            # Apply any live control commands that arrived over the WebSocket.
             if inbox is not None:
                 for cmd in inbox.drain():
+                    if cmd.get("action") == "reopen":
+                        n = controller.reopen_all(t) if controller is not None else 0
+                        print(f"live reopen: lifted {n} active incident(s)")
+                        continue
                     try:
                         inc = incident_from_control(cmd, t)
                     except Exception as exc:  # noqa: BLE001 - bad command shouldn't crash the sim

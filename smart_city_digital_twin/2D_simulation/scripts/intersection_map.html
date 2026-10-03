@@ -1279,30 +1279,39 @@
     try { ws.send(JSON.stringify(obj)); return true; } catch (e) { return false; }
   }
 
+  let liveBlocked = false;   // is a live road block currently active (toggle state)
+
   function onEdgeClick(feat) {
     return function () {
       const id = feat.properties.id;
       const name = feat.properties.name || "(unnamed)";
-      const cmd = "--close-edge " + id + "@23700:24300";
+      const cmd = "--close-edge " + id + "@23400";
       // reflect the clicked edge into the Scenario control field (start a road block from it)
       const scnEdge = document.getElementById("scn-edge");
       if (scnEdge) scnEdge.value = id;
       if (!edgesPick) return;
       edgesPick.innerHTML = "<b>" + esc(id) + "</b> — " + esc(name) +
         "<br><code>" + esc(cmd) + "</code>" +
-        '<div style="margin-top:4px;font-size:11px;">close live for ' +
-        '<input type="number" id="live-dur" value="600" min="0" step="60" style="width:56px;font-size:11px;" /> s ' +
-        '<button type="button" id="live-close">Close live</button></div>' +
+        '<div style="margin-top:4px;"><button type="button" id="live-toggle"></button></div>' +
         '<div class="hist-status" id="live-status"></div>';
-      const btn = document.getElementById("live-close");
-      if (btn) btn.addEventListener("click", function () {
-        const dur = parseInt(document.getElementById("live-dur").value, 10);
-        const msg = { action: "incident", type: "close_edge", edge: id };
-        if (dur > 0) msg.duration = dur;
-        const ok = sendControl(msg);
-        document.getElementById("live-status").textContent = ok
-          ? "sent — closing " + id + (dur > 0 ? " for " + dur + "s" : " until run end")
-          : "not connected to a live emitter (Connect first; local ws only)";
+      const btn = document.getElementById("live-toggle");
+      const st = function () { return document.getElementById("live-status"); };
+      function paint() { btn.textContent = liveBlocked ? "Reopen road (resume)" : "Close live"; }
+      paint();
+      btn.addEventListener("click", function () {
+        if (!liveBlocked) {
+          // close this edge in the RUNNING sim, open-ended — reopen is manual
+          const ok = sendControl({ action: "incident", type: "close_edge", edge: id });
+          if (!ok) { st().textContent = "not connected to a live emitter (Connect first; local ws only)"; return; }
+          liveBlocked = true; paint();
+          st().textContent = "closed " + id + " live — click again to reopen";
+        } else {
+          // lift all active live closures; traffic recovers as the queue drains
+          const ok = sendControl({ action: "reopen" });
+          if (!ok) { st().textContent = "not connected to a live emitter"; return; }
+          liveBlocked = false; paint();
+          st().textContent = "reopened — traffic will recover as the queue drains";
+        }
       });
     };
   }
