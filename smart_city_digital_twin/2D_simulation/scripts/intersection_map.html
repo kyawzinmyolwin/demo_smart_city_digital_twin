@@ -84,6 +84,10 @@
     .hist-controls { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 6px; }
     .hist-controls select, .hist-controls button { font-size: 11px; padding: 3px 6px; }
     .hist-status { font-size: 11px; color: #475569; margin-bottom: 4px; min-height: 14px; }
+    .counts-result { max-height: 180px; overflow: auto; }
+    .counts-table { border-collapse: collapse; width: 100%; font-size: 10.5px; }
+    .counts-table th, .counts-table td { border-bottom: 1px solid #e2e8f0; padding: 2px 5px; text-align: left; white-space: nowrap; }
+    .counts-table th { color: #475569; font-weight: 600; position: sticky; top: 0; background: #fff; }
   </style>
 </head>
 <body>
@@ -105,9 +109,30 @@
     </div>
     <input type="file" id="file-csv" accept=".csv,text/csv" style="margin-top:8px;font-size:11px;max-width:100%;" />
     <div class="live-block">
+      <strong>Scenario control</strong>
+      <div id="scn-buttons" style="margin-top:6px;display:flex;flex-direction:column;gap:4px;"></div>
+      <div style="margin-top:8px;font-size:11px;">
+        <input type="text" id="scn-edge" placeholder="click a road, or type an edge id"
+          spellcheck="false"
+          style="width:100%;box-sizing:border-box;font-size:11px;font-family:ui-monospace,monospace;" />
+        <button type="button" id="scn-roadblock" style="margin-top:4px;">Start road block</button>
+      </div>
+      <div style="margin-top:6px;">
+        <button type="button" id="scn-stop" disabled>Stop</button>
+      </div>
+      <div class="hist-status" id="scn-status">set ?control=&lt;url&gt; to enable</div>
+      <div class="hint" style="margin-top:6px;">
+        Starts/stops the simulation from here (no command line) via the control
+        server (<code>control_server.py</code>). Pick a scenario, then it connects
+        automatically to show the live traffic. Override the endpoint with
+        <code>?control=&lt;url&gt;</code> (default <code>http://localhost:8799</code>).
+      </div>
+    </div>
+    <div class="live-block">
       <strong>Live simulation</strong>
       <span id="ws-status" class="down">disconnected</span> ·
-      <span id="veh-count">0</span> vehicles
+      <span id="veh-count">0</span> vehicles ·
+      sim time <span id="sim-clock">—</span>
       <input type="text" id="ws-url" spellcheck="false"
         style="margin-top:8px;width:100%;box-sizing:border-box;font-size:11px;font-family:ui-monospace,monospace;"
         placeholder="ws://localhost:8765" />
@@ -131,6 +156,40 @@
         above or a <code>?ws=</code> URL parameter (e.g. a deployed
         <code>wss://</code> API Gateway endpoint). Start the emitter first,
         then click Connect.
+      </div>
+    </div>
+    <div class="live-block">
+      <strong>Road edges (for incidents)</strong>
+      <label style="display:block;margin-top:6px;font-size:12px;">
+        <input type="checkbox" id="edges-toggle" /> show roads (click one for its id)
+      </label>
+      <div class="hist-status" id="edges-status">off — tick to show roads</div>
+      <div class="hist-status" id="edges-pick"></div>
+      <div class="hint" style="margin-top:6px;">
+        Loads <code>edges.geojson</code> (generate with <code>edges_geojson.py</code>).
+        Click a road to get its edge id and a ready
+        <code>--close-edge</code> command. Override the file via
+        <code>?edges=&lt;url&gt;</code>.
+      </div>
+    </div>
+    <div class="live-block">
+      <strong>Congestion alerts</strong>
+      <label style="display:block;margin-top:6px;font-size:12px;">
+        <input type="checkbox" id="alerts-toggle" /> flag slow roads on the live feed
+      </label>
+      <div style="font-size:11px;margin-top:4px;">
+        speed &lt;
+        <input type="number" id="alerts-threshold" value="3" min="0" step="0.5"
+          style="width:46px;font-size:11px;" /> m/s for
+        <input type="number" id="alerts-ticks" value="5" min="1" step="1"
+          style="width:40px;font-size:11px;" /> ticks
+      </div>
+      <div class="hist-status" id="alerts-status">off — tick to enable</div>
+      <div id="alerts-list" style="font-size:11px;font-family:ui-monospace,monospace;max-height:140px;overflow:auto;"></div>
+      <div class="hint" style="margin-top:6px;">
+        Flags road segments whose mean speed stays below the threshold for N
+        consecutive ticks (live feed only). Tick <b>show roads</b> above too to
+        highlight the alerted segments in red on the map.
       </div>
     </div>
   </div>
@@ -163,6 +222,44 @@
       </div>
       <div class="hist-status" id="hist-status"></div>
       <div class="chart-box"><canvas id="chart-hist"></canvas></div>
+    </div>
+
+    <div class="hist-block">
+      <strong>Compare scenarios</strong>
+      <div class="hist-controls">
+        <input type="text" id="cmp-a" placeholder="baseline_am" spellcheck="false"
+          style="width:110px;font-size:11px;font-family:ui-monospace,monospace;" />
+        <input type="text" id="cmp-b" placeholder="crash_arterial" spellcheck="false"
+          style="width:110px;font-size:11px;font-family:ui-monospace,monospace;" />
+      </div>
+      <div class="hist-controls">
+        <select id="cmp-field">
+          <option value="avgSpeed">Avg speed (km/h)</option>
+          <option value="congestionIndex">Congestion</option>
+          <option value="vehicleCount">Vehicles</option>
+        </select>
+        <select id="cmp-range">
+          <option value="-15m">15m</option>
+          <option value="-1h" selected>1h</option>
+          <option value="-6h">6h</option>
+          <option value="-24h">24h</option>
+        </select>
+        <button type="button" id="cmp-load">Compare</button>
+      </div>
+      <div class="hist-status" id="cmp-status">two scenario_id runs, baseline vs scenario</div>
+      <div class="chart-box"><canvas id="chart-cmp"></canvas></div>
+      <div class="hist-status" id="cmp-summary" style="margin-top:4px;"></div>
+    </div>
+
+    <div class="hist-block">
+      <strong>CCC intersection counts</strong>
+      <div class="hist-controls">
+        <select id="counts-intersection"><option value="">Intersection…</option></select>
+        <select id="counts-date"><option value="">Date…</option></select>
+        <button type="button" id="counts-load">Load</button>
+      </div>
+      <div class="hist-status" id="counts-status">Set ?counts=&lt;endpoint&gt; to enable</div>
+      <div id="counts-result" class="counts-result"></div>
     </div>
   </div>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
@@ -627,6 +724,17 @@
     wsStatusEl.className = isLive ? "live" : "down";
   }
 
+  // Sim time is seconds-since-midnight; show it as HH:MM so the user can see the
+  // clock (e.g. a road block from 06:30 is obvious rather than a hidden sim-second).
+  function updateSimClock(simTime) {
+    const el = document.getElementById("sim-clock");
+    if (!el || simTime == null) return;
+    const s = Math.floor(Number(simTime)) % 86400;
+    const hh = String(Math.floor(s / 3600)).padStart(2, "0");
+    const mm = String(Math.floor((s % 3600) / 60)).padStart(2, "0");
+    el.textContent = hh + ":" + mm;
+  }
+
   function colorForSpeed(speed) {
     if (speed == null || !isFinite(speed)) return "#64748b";
     if (speed < SPEED_SLOW) return "#dc2626";
@@ -739,6 +847,8 @@
       }
       updateVehicles(data.vehicles);
       pushMetrics(data);
+      updateCongestion(data.vehicles);
+      updateSimClock(data.simTime);
     };
 
     ws.onerror = function () {
@@ -958,6 +1068,466 @@
 
   const histLoadBtn = document.getElementById("hist-load");
   if (histLoadBtn) histLoadBtn.addEventListener("click", loadHistory);
+
+  // --- Compare view: two scenario_id runs overlaid (Increment 2b) -----------
+  let cmpChart = null;
+
+  async function fetchScenarioSeries(field, range, every, scenario) {
+    let url = REPLAY_URL + "?field=" + encodeURIComponent(field) +
+      "&start=" + encodeURIComponent(range) + "&scenario=" + encodeURIComponent(scenario);
+    if (every) url += "&every=" + every;
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error("HTTP " + resp.status);
+    return (await resp.json()).points || [];
+  }
+
+  async function loadCompare() {
+    const statusEl = document.getElementById("cmp-status");
+    if (typeof Chart === "undefined") { statusEl.textContent = "Chart.js not loaded"; return; }
+    const a = document.getElementById("cmp-a").value.trim();
+    const b = document.getElementById("cmp-b").value.trim();
+    if (!a || !b) { statusEl.textContent = "enter two scenario_id values"; return; }
+    const field = document.getElementById("cmp-field").value;
+    const range = document.getElementById("cmp-range").value;
+    const every = HIST_EVERY[range] || "";
+    statusEl.textContent = "loading…";
+    try {
+      const [ptsA, ptsB] = await Promise.all([
+        fetchScenarioSeries(field, range, every, a),
+        fetchScenarioSeries(field, range, every, b),
+      ]);
+      renderCompare(field, range, a, ptsA, b, ptsB);
+      statusEl.textContent = a + ": " + ptsA.length + " pts · " + b + ": " + ptsB.length + " pts";
+      renderCompareSummary(field, a, ptsA, b, ptsB);
+    } catch (err) {
+      statusEl.textContent = "fetch failed — is the replay server running?";
+      document.getElementById("cmp-summary").textContent = "";
+    }
+  }
+
+  function _mean(pts) {
+    if (!pts.length) return null;
+    return pts.reduce(function (s, p) { return s + p.value; }, 0) / pts.length;
+  }
+
+  // One-line quantified headline: mean of each run + the B-vs-A change, with a
+  // direction word that reads correctly per metric (slower/more-congested = worse).
+  function renderCompareSummary(field, nameA, ptsA, nameB, ptsB) {
+    const el = document.getElementById("cmp-summary");
+    const mA = _mean(ptsA), mB = _mean(ptsB);
+    if (mA === null || mB === null) { el.textContent = "not enough data to summarise"; return; }
+    const toKmh = field === "avgSpeed";
+    const unit = toKmh ? " km/h" : "";
+    const scale = toKmh ? 3.6 : 1;
+    const a = mA * scale, b = mB * scale;
+    const pct = mA === 0 ? null : ((mB - mA) / Math.abs(mA)) * 100;
+    // avgSpeed: a drop is worse. congestion/counts: a rise is worse.
+    const worseWhenUp = field !== "avgSpeed";
+    let verdict = "no change";
+    if (pct !== null && Math.abs(pct) >= 0.5) {
+      const rose = mB > mA;
+      verdict = (rose === worseWhenUp) ? "worse" : "better";
+    }
+    const label = toKmh ? "avg speed" : (field === "congestionIndex" ? "congestion" : field);
+    const fmt = function (v) { return (Math.round(v * 10) / 10) + unit; };
+    el.innerHTML = "<b>" + label + "</b>: " + esc(nameA) + " " + fmt(a) + " → " +
+      esc(nameB) + " " + fmt(b) +
+      (pct === null ? "" : "  (" + (pct >= 0 ? "+" : "") + pct.toFixed(0) + "%, " + verdict + ")") +
+      "  · mean over the selected range";
+  }
+
+  function renderCompare(field, range, nameA, ptsA, nameB, ptsB) {
+    const toKmh = field === "avgSpeed";
+    const val = function (p) { return toKmh ? Number((p.value * 3.6).toFixed(1)) : p.value; };
+    // Align on A's timestamps for labels; each dataset plots its own values.
+    const labels = (ptsA.length >= ptsB.length ? ptsA : ptsB)
+      .map(function (p) { return new Date(p.time).toLocaleTimeString(); });
+    if (cmpChart) cmpChart.destroy();
+    cmpChart = new Chart(document.getElementById("chart-cmp").getContext("2d"), {
+      type: "line",
+      data: {
+        labels: labels,
+        datasets: [
+          { label: nameA, data: ptsA.map(val), borderColor: "#0e7c72",
+            borderWidth: 1.5, pointRadius: 0, tension: 0.25, fill: false },
+          { label: nameB, data: ptsB.map(val), borderColor: "#dc2626",
+            borderWidth: 1.5, pointRadius: 0, tension: 0.25, fill: false },
+        ],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false, animation: false,
+        plugins: {
+          legend: { display: true, labels: { font: { size: 10 } } },
+          title: { display: true, text: (toKmh ? "avgSpeed (km/h)" : field) + " · " + range,
+                   font: { size: 11 } },
+        },
+        scales: {
+          x: { ticks: { maxTicksLimit: 4, font: { size: 9 } } },
+          y: { beginAtZero: true, ticks: { maxTicksLimit: 4, font: { size: 9 } } },
+        },
+      },
+    });
+  }
+
+  const cmpLoadBtn = document.getElementById("cmp-load");
+  if (cmpLoadBtn) cmpLoadBtn.addEventListener("click", loadCompare);
+
+  // ---- CCC intersection counts (from the traffic-count ETL query API) -------
+  // Historical Miovision turning counts, served by the query-traffic-counts
+  // Lambda via API Gateway. Point the page at it with ?counts=<endpoint>, e.g.
+  //   ?counts=https://xxxx.execute-api.ap-southeast-2.amazonaws.com/prod/traffic-counts
+  // With no ?counts= the panel just shows a hint (the live map is unaffected).
+  const COUNTS_URL = new URLSearchParams(window.location.search).get("counts") || "";
+  const cIntersection = document.getElementById("counts-intersection");
+  const cDate = document.getElementById("counts-date");
+  const cLoadBtn = document.getElementById("counts-load");
+  const cStatus = document.getElementById("counts-status");
+  const cResult = document.getElementById("counts-result");
+
+  function cSetStatus(msg) { if (cStatus) cStatus.textContent = msg; }
+  function esc(s) {
+    return String(s).replace(/[&<>"]/g, function (ch) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch];
+    });
+  }
+  function cOptions(placeholder, values) {
+    return '<option value="">' + placeholder + "</option>" +
+      values.map(function (v) { return '<option value="' + esc(v) + '">' + esc(v) + "</option>"; }).join("");
+  }
+  async function cFetch(params) {
+    const resp = await fetch(COUNTS_URL + (params ? "?" + params : ""));
+    if (!resp.ok && resp.status !== 404) throw new Error("HTTP " + resp.status);
+    return resp.json();
+  }
+
+  async function cInit() {
+    if (!COUNTS_URL) return;                 // leave the hint in place
+    cSetStatus("loading intersections…");
+    try {
+      const data = await cFetch("");
+      const items = data.intersections || [];
+      cIntersection.innerHTML = '<option value="">Intersection…</option>' +
+        items.map(function (it) {
+          var id = (it && it.id != null) ? it.id : it;   // tolerate the old string shape
+          var nm = (it && it.name) ? it.name : "";
+          return '<option value="' + esc(id) + '">' + esc(nm ? id + " — " + nm : id) + "</option>";
+        }).join("");
+      cSetStatus(items.length + " intersections");
+    } catch (e) { cSetStatus("could not reach counts API"); }
+  }
+
+  async function cLoadDates() {
+    cDate.innerHTML = cOptions("Date…", []);
+    cResult.innerHTML = "";
+    const iid = cIntersection.value;
+    if (!iid) return;
+    cSetStatus("loading dates…");
+    try {
+      const data = await cFetch("intersection=" + encodeURIComponent(iid));
+      const dates = data.dates || [];
+      cDate.innerHTML = cOptions("Date…", dates);
+      cSetStatus(dates.length + " survey dates");
+    } catch (e) { cSetStatus("could not load dates"); }
+  }
+
+  function renderCounts(rows) {
+    if (!rows || !rows.length) { cResult.innerHTML = "<em>no rows</em>"; return; }
+    const preferred = ["time", "approach_bound", "movement", "lights", "other_vehicles", "bicycles_on_road", "totals"];
+    const present = preferred.filter(function (k) { return k in rows[0]; });
+    const cols = present.length ? present : Object.keys(rows[0]).slice(0, 6);
+    const head = "<tr>" + cols.map(function (c) { return "<th>" + esc(c) + "</th>"; }).join("") + "</tr>";
+    const body = rows.slice(0, 50).map(function (r) {
+      return "<tr>" + cols.map(function (c) { return "<td>" + esc(r[c] == null ? "" : r[c]) + "</td>"; }).join("") + "</tr>";
+    }).join("");
+    cResult.innerHTML = '<table class="counts-table"><thead>' + head + "</thead><tbody>" + body + "</tbody></table>";
+  }
+
+  async function loadCounts() {
+    if (!COUNTS_URL) { cSetStatus("Set ?counts=<endpoint> to enable"); return; }
+    const iid = cIntersection.value, date = cDate.value;
+    if (!iid || !date) { cSetStatus("pick an intersection and date"); return; }
+    cSetStatus("loading…");
+    try {
+      const data = await cFetch("intersection=" + encodeURIComponent(iid) + "&date=" + encodeURIComponent(date));
+      if (data.found === false) { cResult.innerHTML = "<em>not found</em>"; cSetStatus("no data"); return; }
+      renderCounts(data.rows);
+      cSetStatus((data.rowCount != null ? data.rowCount : (data.rows || []).length) + " rows");
+    } catch (e) { cSetStatus("fetch failed"); }
+  }
+
+  if (cIntersection) cIntersection.addEventListener("change", cLoadDates);
+  if (cLoadBtn) cLoadBtn.addEventListener("click", loadCounts);
+  cInit();
+  // -------------------------------------------------------------------------
+
+  // --- Road edge overlay: click a road to read its edge id for incidents ----
+  const EDGES_URL = (new URLSearchParams(window.location.search).get("edges") || "").trim()
+    || "../data/output/network/edges.geojson";
+  const edgeGeoLayer = L.layerGroup();   // not added by default — roads are visually busy
+  const edgePolylines = {};              // edge id -> its Leaflet polyline (for congestion highlight)
+  const edgesToggle = document.getElementById("edges-toggle");
+  const edgesStatus = document.getElementById("edges-status");
+  const edgesPick = document.getElementById("edges-pick");
+  let edgesLoaded = false;
+
+  function edgesSetStatus(msg) { if (edgesStatus) edgesStatus.textContent = msg; }
+
+  // Send a control command up the live WebSocket (local emitter only). Returns
+  // false if not connected. The cloud API Gateway path doesn't read these.
+  function sendControl(obj) {
+    if (!ws || ws.readyState !== WebSocket.OPEN) return false;
+    try { ws.send(JSON.stringify(obj)); return true; } catch (e) { return false; }
+  }
+
+  let liveBlocked = false;   // is a live road block currently active (toggle state)
+
+  function onEdgeClick(feat) {
+    return function () {
+      const id = feat.properties.id;
+      const name = feat.properties.name || "(unnamed)";
+      const cmd = "--close-edge " + id + "@23400";
+      // reflect the clicked edge into the Scenario control field (start a road block from it)
+      const scnEdge = document.getElementById("scn-edge");
+      if (scnEdge) scnEdge.value = id;
+      if (!edgesPick) return;
+      edgesPick.innerHTML = "<b>" + esc(id) + "</b> — " + esc(name) +
+        "<br><code>" + esc(cmd) + "</code>" +
+        '<div style="margin-top:4px;"><button type="button" id="live-toggle"></button></div>' +
+        '<div class="hist-status" id="live-status"></div>';
+      const btn = document.getElementById("live-toggle");
+      const st = function () { return document.getElementById("live-status"); };
+      function paint() { btn.textContent = liveBlocked ? "Reopen road (resume)" : "Close live"; }
+      paint();
+      btn.addEventListener("click", function () {
+        if (!liveBlocked) {
+          // close this edge in the RUNNING sim, open-ended — reopen is manual
+          const ok = sendControl({ action: "incident", type: "close_edge", edge: id });
+          if (!ok) { st().textContent = "not connected to a live emitter (Connect first; local ws only)"; return; }
+          liveBlocked = true; paint();
+          st().textContent = "closed " + id + " live — click again to reopen";
+        } else {
+          // lift all active live closures; traffic recovers as the queue drains
+          const ok = sendControl({ action: "reopen" });
+          if (!ok) { st().textContent = "not connected to a live emitter"; return; }
+          liveBlocked = false; paint();
+          st().textContent = "reopened — traffic will recover as the queue drains";
+        }
+      });
+    };
+  }
+
+  async function loadEdges() {
+    if (edgesLoaded) return true;
+    edgesSetStatus("loading roads…");
+    try {
+      const resp = await fetch(EDGES_URL, { cache: "no-store" });
+      if (!resp.ok) throw new Error("HTTP " + resp.status);
+      const gj = await resp.json();
+      const feats = gj.features || [];
+      feats.forEach(function (feat) {
+        const coords = (feat.geometry && feat.geometry.coordinates) || [];
+        const latlngs = coords.map(function (c) { return [c[1], c[0]]; }); // lon,lat -> lat,lng
+        if (latlngs.length < 2) return;
+        const pl = L.polyline(latlngs, { color: "#7c3aed", weight: 2, opacity: 0.6 });
+        pl.on("click", onEdgeClick(feat));
+        pl.bindTooltip(feat.properties.id + (feat.properties.name ? " · " + feat.properties.name : ""),
+                       { sticky: true });
+        edgeGeoLayer.addLayer(pl);
+        edgePolylines[feat.properties.id] = pl;
+      });
+      edgesLoaded = true;
+      edgesSetStatus(feats.length + " roads — click one for its id");
+      return true;
+    } catch (e) {
+      edgesSetStatus("could not load edges.geojson — run edges_geojson.py, or set ?edges=<url>");
+      return false;
+    }
+  }
+
+  if (edgesToggle) {
+    edgesToggle.addEventListener("change", async function () {
+      if (edgesToggle.checked) {
+        const ok = await loadEdges();
+        if (ok) { edgeGeoLayer.addTo(map); } else { edgesToggle.checked = false; }
+      } else {
+        map.removeLayer(edgeGeoLayer);
+      }
+    });
+  }
+  // -------------------------------------------------------------------------
+
+  // --- Congestion alerts: flag edges slow for N consecutive live ticks (Inc 3) ---
+  const alertsToggle = document.getElementById("alerts-toggle");
+  const alertsStatus = document.getElementById("alerts-status");
+  const alertsList = document.getElementById("alerts-list");
+  const alertStreak = {};          // edge id -> consecutive ticks below threshold
+  const highlighted = {};          // edge id -> true while drawn red
+
+  function alertsEnabled() { return alertsToggle && alertsToggle.checked; }
+
+  /** Pure core: group live vehicle speeds by edge, update per-edge streaks, and
+   *  return the edges currently alerting (mean speed < threshold for >= ticks). */
+  function detectCongestion(vehicles, threshold, needTicks, streak) {
+    const byEdge = {};
+    (vehicles || []).forEach(function (v) {
+      if (!v.lane || v.speed == null) return;
+      const edge = String(v.lane).replace(/_[0-9]+$/, "");   // lane id -> edge id
+      if (edge.charAt(0) === ":") return;                     // skip internal edges
+      (byEdge[edge] = byEdge[edge] || []).push(Number(v.speed));
+    });
+    const alerts = [];
+    const seen = {};
+    Object.keys(byEdge).forEach(function (edge) {
+      seen[edge] = true;
+      const sp = byEdge[edge];
+      const mean = sp.reduce(function (s, x) { return s + x; }, 0) / sp.length;
+      streak[edge] = mean < threshold ? (streak[edge] || 0) + 1 : 0;
+      if (streak[edge] >= needTicks) alerts.push({ edge: edge, mean: mean, ticks: streak[edge], n: sp.length });
+    });
+    // edges with no vehicles this tick: clear (free-flowing / empty, not congested)
+    Object.keys(streak).forEach(function (edge) { if (!seen[edge]) streak[edge] = 0; });
+    alerts.sort(function (a, b) { return a.mean - b.mean; });   // worst first
+    return alerts;
+  }
+
+  function highlightAlerts(alerts) {
+    const nowAlert = {};
+    alerts.forEach(function (a) {
+      nowAlert[a.edge] = true;
+      const pl = edgePolylines[a.edge];
+      if (pl) { pl.setStyle({ color: "#dc2626", weight: 5, opacity: 0.9 }); highlighted[a.edge] = true; }
+    });
+    // reset edges that recovered
+    Object.keys(highlighted).forEach(function (edge) {
+      if (!nowAlert[edge]) {
+        const pl = edgePolylines[edge];
+        if (pl) pl.setStyle({ color: "#7c3aed", weight: 2, opacity: 0.6 });
+        delete highlighted[edge];
+      }
+    });
+  }
+
+  function updateCongestion(vehicles) {
+    if (!alertsEnabled()) return;
+    const threshold = parseFloat(document.getElementById("alerts-threshold").value) || 3;
+    const needTicks = parseInt(document.getElementById("alerts-ticks").value, 10) || 5;
+    const alerts = detectCongestion(vehicles, threshold, needTicks, alertStreak);
+    highlightAlerts(alerts);
+    if (!alerts.length) {
+      alertsStatus.textContent = "no congested segments";
+      alertsList.innerHTML = "";
+      return;
+    }
+    alertsStatus.textContent = alerts.length + " congested segment(s)";
+    alertsList.innerHTML = alerts.slice(0, 20).map(function (a) {
+      return "<div>" + esc(a.edge) + " — " + (Math.round(a.mean * 3.6 * 10) / 10) +
+        " km/h (" + a.ticks + " ticks, " + a.n + " veh)</div>";
+    }).join("");
+  }
+
+  function clearCongestion() {
+    Object.keys(alertStreak).forEach(function (k) { delete alertStreak[k]; });
+    highlightAlerts([]);                 // resets any red edges
+    alertsList.innerHTML = "";
+  }
+
+  if (alertsToggle) {
+    alertsToggle.addEventListener("change", function () {
+      if (alertsToggle.checked) { alertsStatus.textContent = "watching the live feed…"; }
+      else { clearCongestion(); alertsStatus.textContent = "off — tick to enable"; }
+    });
+  }
+  // -------------------------------------------------------------------------
+
+  // --- Scenario control: start/stop the sim from the browser (control_server) ---
+  const CONTROL_URL = (new URLSearchParams(window.location.search).get("control") || "").trim()
+    || "http://localhost:8799";
+  const scnButtons = document.getElementById("scn-buttons");
+  const scnStop = document.getElementById("scn-stop");
+  const scnStatus = document.getElementById("scn-status");
+  let scnPollTimer = null;
+
+  function scnSet(msg) { if (scnStatus) scnStatus.textContent = msg; }
+
+  async function scnInit() {
+    try {
+      const resp = await fetch(CONTROL_URL + "/scenarios");
+      if (!resp.ok) throw new Error("HTTP " + resp.status);
+      const data = await resp.json();
+      (data.scenarios || []).forEach(function (s) {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.textContent = "Start: " + s.label;
+        b.title = s.description || "";
+        b.addEventListener("click", function () { scnStart(s.id); });
+        scnButtons.appendChild(b);
+      });
+      scnSet("pick a scenario to start");
+      scnPoll();
+    } catch (e) {
+      scnSet("control server not reachable (run control_server.py, or set ?control=<url>)");
+    }
+  }
+
+  async function scnStart(id) {
+    scnSet("starting " + id + "…");
+    try {
+      const resp = await fetch(CONTROL_URL + "/start?scenario=" + encodeURIComponent(id), { method: "POST" });
+      const data = await resp.json();
+      if (!data.ok) { scnSet("could not start: " + (data.error || resp.status)); return; }
+      scnSet("started " + id + " — connecting…");
+      setTimeout(function () { if (!ws) connectWs(); }, 2500);   // let the emitter bind first
+      scnPoll();
+    } catch (e) { scnSet("start failed — is the control server running?"); }
+  }
+
+  async function scnStopSim() {
+    scnSet("stopping…");
+    try {
+      await fetch(CONTROL_URL + "/stop", { method: "POST" });
+      scnSet("stopped");
+      scnPoll();
+    } catch (e) { scnSet("stop failed"); }
+  }
+
+  async function scnPoll() {
+    try {
+      const resp = await fetch(CONTROL_URL + "/status");
+      const st = await resp.json();
+      if (st.running) {
+        scnSet("running " + st.scenario + " (" + Math.round(st.uptimeSec) + "s)");
+        if (scnStop) scnStop.disabled = false;
+      } else {
+        if (scnStop) scnStop.disabled = true;
+        if (scnStatus && scnStatus.textContent.indexOf("not reachable") === -1) {
+          scnSet("idle — pick a scenario to start");
+        }
+      }
+    } catch (e) { /* control server gone — keep the last message */ }
+    clearTimeout(scnPollTimer);
+    scnPollTimer = setTimeout(scnPoll, 3000);
+  }
+
+  async function scnStartRoadblock() {
+    const edge = (document.getElementById("scn-edge").value || "").trim();
+    if (!edge) { scnSet("click a road on the map, or type an edge id, first"); return; }
+    scnSet("starting road block on " + edge + "…");
+    try {
+      const resp = await fetch(CONTROL_URL + "/start_roadblock?edge=" + encodeURIComponent(edge),
+                               { method: "POST" });
+      const data = await resp.json();
+      if (!data.ok) { scnSet("could not start: " + (data.error || resp.status)); return; }
+      scnSet("road block on " + edge + " (closed from the start, 06:30) — connecting…");
+      setTimeout(function () { if (!ws) connectWs(); }, 2500);   // let the emitter bind first
+      scnPoll();
+    } catch (e) { scnSet("start failed — is the control server running?"); }
+  }
+
+  const scnRoadblockBtn = document.getElementById("scn-roadblock");
+  if (scnRoadblockBtn) scnRoadblockBtn.addEventListener("click", scnStartRoadblock);
+
+  if (scnStop) scnStop.addEventListener("click", scnStopSim);
+  scnInit();
   // -------------------------------------------------------------------------
 
   loadFromFetch().catch(function () {

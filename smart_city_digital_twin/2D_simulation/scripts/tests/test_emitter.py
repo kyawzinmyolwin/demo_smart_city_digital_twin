@@ -15,7 +15,17 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from emitter import serialize_vehicles, to_json, wrap_sendmessage  # noqa: E402
+from emitter import ControlInbox, serialize_vehicles, to_json, wrap_sendmessage  # noqa: E402
+
+
+def test_control_inbox_add_and_drain():
+    box = ControlInbox()
+    assert box.drain() == []
+    box.add({"action": "incident", "type": "close_edge", "edge": "E1"})
+    box.add({"action": "incident", "type": "close_edge", "edge": "E2"})
+    out = box.drain()
+    assert [c["edge"] for c in out] == ["E1", "E2"]
+    assert box.drain() == []          # drain clears the queue
 
 
 class FakeVehicleDomain:
@@ -70,6 +80,7 @@ def test_snapshot_shape_and_conversion():
     snap = serialize_vehicles(FakeTraci(), FakeNet(), sim_id="test-sim")
 
     assert snap["simId"] == "test-sim"
+    assert snap["scenarioId"] == "test-sim"      # defaults to sim_id when not given
     assert snap["simTime"] == 23460.1
     assert snap["vehicleCount"] == 2
     assert isinstance(snap["tick"], int)
@@ -85,6 +96,12 @@ def test_snapshot_shape_and_conversion():
     assert v1["accel"] == 0.2
     assert v1["type"] == "car"
     assert snap["vehicles"][1]["type"] == "bus"
+
+
+def test_scenario_id_overrides_default():
+    snap = serialize_vehicles(FakeTraci(), FakeNet(), sim_id="s", scenario_id="crash_arterial")
+    assert snap["simId"] == "s"
+    assert snap["scenarioId"] == "crash_arterial"
 
 
 def test_empty_network():

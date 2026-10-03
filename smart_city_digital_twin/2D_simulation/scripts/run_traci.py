@@ -25,7 +25,8 @@ import time
 from pathlib import Path
 
 from _sim_root import SIM_ROOT  # noqa: E402
-from emitter import Broadcaster, CloudForwarder, serialize_vehicles, serve, to_json
+from emitter import Broadcaster, ControlInbox, CloudForwarder, serialize_vehicles, serve, to_json
+from incidents import IncidentController, incident_from_control
 from sim_pipeline import SUMOCFG, setup_sumolib, sumo_bin
 
 # Earliest vehicle depart in data/output/demand/traffic_trips.routed.rou.xml (06:30).
@@ -104,16 +105,41 @@ def _should_stop(traci, args) -> bool:
     return traci.simulation.getMinExpectedNumber() <= 0 and t >= (args.jump_to or 0)
 
 
-def _load_net():
+def _net_path_for(args) -> Path:
+    """The net file the emitter must use for XY -> WGS84 conversion.
+
+    When a --sumocfg is given (a scenario), read that config's <net-file> so the
+    conversion matches the network SUMO is actually running — otherwise a scenario
+    on the intersection graph would be converted with the default street net's
+    projection/offset and land vehicles in the wrong place on the map. Falls back
+    to the project default net when there's no --sumocfg or it can't be parsed.
+    """
+    from sim_pipeline import NET_XML
+
+    cfg = getattr(args, "sumocfg", None)
+    if cfg:
+        try:
+            import xml.etree.ElementTree as ET
+
+            cfg_path = Path(cfg)
+            node = ET.parse(cfg_path).getroot().find(".//net-file")
+            value = node.get("value") if node is not None else None
+            if value:
+                return (cfg_path.parent / value).resolve()
+        except Exception as exc:  # noqa: BLE001 - fall back to the default net, but say why
+            print(f"warning: could not read net-file from {cfg} ({exc}); "
+                  f"using default net for coordinate conversion", file=sys.stderr)
+    return Path(NET_XML)
+
+
+def _load_net(args=None):
     """Load the sumolib net once, for XY -> WGS84 conversion in the emitter."""
     import sumolib  # type: ignore
 
-    from sim_pipeline import NET_XML
-
-    return sumolib.net.readNet(str(NET_XML))
+    return sumolib.net.readNet(str(_net_path_for(args)))
 
 
-async def _run_emitting(traci, args) -> None:
+async def _run_emitting(traci, args, controller=None) -> None:
     """Step the sim and broadcast each Nth step's snapshot over WebSocket.
 
     This is the async twin of the plain while-loop in main(). The key line is the
@@ -121,40 +147,72 @@ async def _run_emitting(traci, args) -> None:
     loop so the WebSocket server can accept connections and flush frames before
     we take the next (blocking) simulation step.
     """
-    net = _load_net()
+    net = _load_net(args)
 
     # Two independent sinks: a local WebSocket server (--emit, for the browser
     # dashboard) and/or a cloud forwarder (--emit-target, dials out to API Gateway).
     broadcaster = None
     server = None
     forwarder = None
+    inbox = None
     if args.emit:
         broadcaster = Broadcaster()
-        server = await serve(broadcaster, args.emit_host, args.emit_port)
+        inbox = ControlInbox()            # dashboard → here: live click-to-inject commands
+        server = await serve(broadcaster, args.emit_host, args.emit_port, inbox)
         print(f"Emitter live on ws://{args.emit_host}:{args.emit_port} (sim id: {args.sim_id})")
     if args.emit_target:
         forwarder = CloudForwarder(args.emit_target)
         print(f"Forwarding snapshots to {args.emit_target}")
 
     step = 0
+    # Real-time pacing: anchor wall-clock to sim time so playback tracks the clock
+    # (or a --speed multiple of it) instead of running flat out. A light scenario
+    # (few vehicles) otherwise finishes in a second; this makes it watchable.
+    speed = args.speed if args.speed and args.speed > 0 else 1.0
+    sim_start = traci.simulation.getTime()
+    wall_start = time.monotonic()
     try:
         print("Running simulation ...")
         while not _should_stop(traci, args):
             t = traci.simulation.getTime()
+            # Apply any live control commands that arrived over the WebSocket.
+            if inbox is not None:
+                for cmd in inbox.drain():
+                    if cmd.get("action") == "reopen":
+                        n = controller.reopen_all(t) if controller is not None else 0
+                        print(f"live reopen: lifted {n} active incident(s)")
+                        continue
+                    try:
+                        inc = incident_from_control(cmd, t)
+                    except Exception as exc:  # noqa: BLE001 - bad command shouldn't crash the sim
+                        print(f"ignoring live incident command {cmd!r}: {exc}", file=sys.stderr)
+                        continue
+                    if controller is None:
+                        controller = IncidentController([])
+                    controller.add(inc)
+                    print(f"live incident injected: {inc.describe()}")
+            if controller is not None:
+                controller.step(traci, t)
             traci.simulationStep()
             step += 1
             # Serialise once per emitted tick, only if a sink actually needs it
             # (a local client is connected, or we're forwarding to the cloud).
             local_wants = broadcaster is not None and broadcaster.client_count
             if step % args.emit_interval == 0 and (local_wants or forwarder is not None):
-                snapshot = serialize_vehicles(traci, net, args.sim_id)
+                snapshot = serialize_vehicles(traci, net, args.sim_id, args.scenario_id)
                 if local_wants:
                     await broadcaster.broadcast(to_json(snapshot))
                 if forwarder is not None:
                     await forwarder.send(snapshot)
             if int(t) % 60 == 0:
                 _print_status(traci)
-            await asyncio.sleep(0)  # yield to the WebSocket server / forwarder
+            # Pace to wall-clock when asked; otherwise just yield to the event loop
+            # so the WebSocket server / forwarder can make progress.
+            lag = 0.0
+            if args.real_time:
+                sim_elapsed = traci.simulation.getTime() - sim_start
+                lag = (sim_elapsed / speed) - (time.monotonic() - wall_start)
+            await asyncio.sleep(lag if lag > 0 else 0)
     finally:
         if server is not None:
             server.close()
@@ -201,6 +259,26 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--end", type=float, default=None, help="Stop at this sim time (default: run until idle)")
     p.add_argument("--gui", action="store_true", default=True, help="Use sumo-gui (default)")
     p.add_argument("--no-gui", action="store_false", dest="gui", help="Use headless sumo instead")
+    p.add_argument(
+        "--sumocfg",
+        default=None,
+        metavar="PATH",
+        help="Override the SUMO config to launch (launch mode only; ignored with "
+        "--connect). Use e.g. scenarios/low_traffic.sumocfg for a small test run.",
+    )
+    p.add_argument(
+        "--real-time",
+        action="store_true",
+        help="Pace the emitting loop to wall-clock time so a light scenario is "
+        "watchable (otherwise it runs as fast as possible). Emit mode only.",
+    )
+    p.add_argument(
+        "--speed",
+        type=float,
+        default=1.0,
+        metavar="X",
+        help="Playback multiplier for --real-time (2 = twice real time; default: 1).",
+    )
     # --- live emitter (Phase 1) ---
     p.add_argument(
         "--emit",
@@ -231,6 +309,12 @@ def build_parser() -> argparse.ArgumentParser:
         help=f"Scenario id echoed to clients (default: {DEFAULT_SIM_ID})",
     )
     p.add_argument(
+        "--scenario-id",
+        default=None,
+        help="Decision-support scenario name tagged onto stored metrics for side-by-side "
+        "comparison (e.g. baseline_am vs crash_arterial). Defaults to --sim-id.",
+    )
+    p.add_argument(
         "--emit-target",
         default=None,
         metavar="WSS_URL",
@@ -238,7 +322,37 @@ def build_parser() -> argparse.ArgumentParser:
         "action (e.g. the cloud API Gateway wss:// URL). Can be used with or "
         "without --emit.",
     )
+    # --- incident injection (scenario / decision-support twin, Increment 1) ---
+    p.add_argument(
+        "--incident-file",
+        default=None,
+        metavar="PATH",
+        help="JSON incident spec to inject during the run (close_edge/close_lane/"
+        "set_speed/add_vehicles). See incidents.py.",
+    )
+    p.add_argument(
+        "--close-edge",
+        action="append",
+        default=[],
+        metavar="EDGE@START[:END]",
+        help="Quick edge closure, e.g. E123@23460:23760. Repeatable. Shorthand for a "
+        "close_edge incident without writing a spec file.",
+    )
     return p
+
+
+def _build_incidents(args) -> list:
+    """Assemble the incident list from --incident-file and any --close-edge flags."""
+    import json
+
+    from incidents import parse_cli_incident, parse_incidents
+
+    incidents = []
+    if args.incident_file:
+        with open(args.incident_file, encoding="utf-8") as f:
+            incidents.extend(parse_incidents(json.load(f)))
+    incidents.extend(parse_cli_incident(s) for s in (args.close_edge or []))
+    return incidents
 
 
 def main() -> int:
@@ -269,7 +383,7 @@ def main() -> int:
         cmd = [
             binary,
             "-c",
-            str(SUMOCFG),
+            str(args.sumocfg) if args.sumocfg else str(SUMOCFG),
             "-b",
             str(args.begin),
             "--step-length",
@@ -283,6 +397,12 @@ def main() -> int:
         print(f"Starting SUMO on TraCI port {args.port}:", " ".join(cmd))
         traci.start(cmd, port=args.port)
 
+    controller = None
+    incidents = _build_incidents(args)
+    if incidents:
+        controller = IncidentController(incidents)
+        print(f"Incidents scheduled: {controller.summary}")
+
     try:
         if args.jump_to is not None and args.jump_to > traci.simulation.getTime():
             print(f"Jumping to {args.jump_to:.0f}s ({_fmt_clock(args.jump_to)}) ...")
@@ -293,7 +413,7 @@ def main() -> int:
             # Emitting path: run the loop inside an asyncio event loop so the
             # WebSocket server and/or cloud forwarder run concurrently with the
             # TraCI stepping.
-            asyncio.run(_run_emitting(traci, args))
+            asyncio.run(_run_emitting(traci, args, controller))
         else:
             print("Running simulation ...")
             while True:
@@ -302,6 +422,8 @@ def main() -> int:
                     break
                 if traci.simulation.getMinExpectedNumber() <= 0 and t >= (args.jump_to or 0):
                     break
+                if controller is not None:
+                    controller.step(traci, t)
                 traci.simulationStep()
                 if int(t) % 60 == 0:
                     _print_status(traci)

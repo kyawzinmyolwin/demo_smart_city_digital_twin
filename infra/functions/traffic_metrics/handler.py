@@ -37,6 +37,7 @@ def _get_token():
 def _line_protocol(m):
     # measurement,tagset fieldset   (timestamp omitted → InfluxDB uses server time)
     sim_id = str(m.get("simId", "unknown")).replace(" ", "_")
+    scenario_id = str(m.get("scenarioId", m.get("simId", "unknown"))).replace(" ", "_")
     fields = [
         f"vehicleCount={int(m['vehicleCount'])}i",
         f"avgSpeed={float(m['avgSpeed'])}",
@@ -46,7 +47,7 @@ def _line_protocol(m):
     ]
     if m.get("simTime") is not None:
         fields.append(f"simTime={float(m['simTime'])}")
-    return f"traffic_metrics,simId={sim_id} {','.join(fields)}"
+    return f"traffic_metrics,simId={sim_id},scenario_id={scenario_id} {','.join(fields)}"
 
 
 def lambda_handler(event, context):
