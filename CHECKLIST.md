@@ -38,6 +38,9 @@ _Updated 2026-10-03._
 - [ ] 2-min demo recording + architecture diagram
 - [ ] CV / LinkedIn write-up
 
+### Nice-to-have enhancements
+- [ ] Auto-start `metrics_writer.py` from `control_server.py` when a scenario starts (and stop it on Stop) — so the GUI path fills InfluxDB without a separate terminal (removes the "forgot the writer" trap)
+
 ### Deferred by choice (not scheduled)
 - [ ] Incident rerouting / detours (~6–9h)
 - [ ] Cloud control path for click-to-inject + cloud start/stop (API Gateway + SSM)
