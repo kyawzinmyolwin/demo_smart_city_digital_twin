@@ -173,6 +173,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--bucket", default=None)
     p.add_argument("--token", default=None)
     p.add_argument("--port", type=int, default=DEFAULT_PORT)
+    p.add_argument("--host", default="0.0.0.0",
+                   help="Bind host (default 0.0.0.0 so it's reachable through VM port-forwarding; "
+                        "use 127.0.0.1 to restrict to this machine).")
     return p
 
 
@@ -188,8 +191,8 @@ def main() -> int:
     if not cfg["token"] or not cfg["org"]:
         print("Missing INFLUXDB_TOKEN / INFLUXDB_ORG (set via .env or flags).", flush=True)
         return 2
-    server = ThreadingHTTPServer(("localhost", args.port), make_handler(cfg))
-    print(f"Replay server on http://localhost:{args.port}/metrics "
+    server = ThreadingHTTPServer((args.host, args.port), make_handler(cfg))
+    print(f"Replay server on http://{args.host}:{args.port}/metrics "
           f"→ {cfg['influx_url']} (bucket {cfg['bucket']})", flush=True)
     try:
         server.serve_forever()
