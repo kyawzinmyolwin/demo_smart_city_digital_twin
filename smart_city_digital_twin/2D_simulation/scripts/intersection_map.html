@@ -245,10 +245,12 @@
           <option value="-24h">24h</option>
         </select>
         <button type="button" id="cmp-load">Compare</button>
+        <button type="button" id="cmp-impact">Impact report</button>
       </div>
       <div class="hist-status" id="cmp-status">two scenario_id runs, baseline vs scenario</div>
       <div class="chart-box"><canvas id="chart-cmp"></canvas></div>
       <div class="hist-status" id="cmp-summary" style="margin-top:4px;"></div>
+      <div id="cmp-impact-out" style="margin-top:6px;font-size:11px;"></div>
     </div>
 
     <div class="hist-block">
@@ -1171,6 +1173,81 @@
 
   const cmpLoadBtn = document.getElementById("cmp-load");
   if (cmpLoadBtn) cmpLoadBtn.addEventListener("click", loadCompare);
+
+  // --- Impact report (Increment 4 v1): windowed baseline-vs-incident metrics ----
+  function _mn(pts) { return (pts && pts.length) ? pts.reduce(function (s, p) { return s + p.value; }, 0) / pts.length : null; }
+  function _mx(pts) { return (pts && pts.length) ? pts.reduce(function (m, p) { return Math.max(m, p.value); }, -Infinity) : null; }
+
+  /** Pure: compute the impact rows from each scenario's field series.
+   *  base/inc are {avgSpeed:[pts], congestionIndex:[pts], stoppedCount:[pts], vehicleCount:[pts]}.
+   *  Uses per-series aggregates (mean/max) — no timestamp alignment needed, since the two
+   *  runs happen at different wall-clock times. */
+  function computeImpact(base, inc) {
+    const rows = [];
+    const pct = function (b, i) { return (b == null || i == null || b === 0) ? null : ((i - b) / Math.abs(b)) * 100; };
+    const sB = _mn(base.avgSpeed), sI = _mn(inc.avgSpeed);
+    rows.push({ k: "Avg speed (km/h)", b: sB == null ? null : sB * 3.6, i: sI == null ? null : sI * 3.6,
+                d: pct(sB, sI), unit: "", worseUp: false });
+    const cB = _mn(base.congestionIndex), cI = _mn(inc.congestionIndex);
+    rows.push({ k: "Congestion index", b: cB, i: cI, d: pct(cB, cI), unit: "", worseUp: true });
+    rows.push({ k: "Stopped (mean)", b: _mn(base.stoppedCount), i: _mn(inc.stoppedCount),
+                d: pct(_mn(base.stoppedCount), _mn(inc.stoppedCount)), unit: " veh", worseUp: true });
+    rows.push({ k: "Stopped (peak)", b: _mx(base.stoppedCount), i: _mx(inc.stoppedCount),
+                d: pct(_mx(base.stoppedCount), _mx(inc.stoppedCount)), unit: " veh", worseUp: true });
+    rows.push({ k: "Vehicles (mean)", b: _mn(base.vehicleCount), i: _mn(inc.vehicleCount),
+                d: pct(_mn(base.vehicleCount), _mn(inc.vehicleCount)), unit: "", worseUp: true });
+    return rows;
+  }
+
+  async function loadImpact() {
+    const statusEl = document.getElementById("cmp-status");
+    const out = document.getElementById("cmp-impact-out");
+    const a = document.getElementById("cmp-a").value.trim();
+    const b = document.getElementById("cmp-b").value.trim();
+    if (!a || !b) { statusEl.textContent = "enter two scenario_id values"; return; }
+    const range = document.getElementById("cmp-range").value;
+    const fields = ["avgSpeed", "congestionIndex", "stoppedCount", "vehicleCount"];
+    statusEl.textContent = "building impact report…";
+    try {
+      async function grab(scn) {
+        const o = {};
+        // raw points (no aggregation) so peaks are preserved
+        for (const f of fields) o[f] = await fetchScenarioSeries(f, range, "", scn);
+        return o;
+      }
+      const [base, inc] = await Promise.all([grab(a), grab(b)]);
+      renderImpact(a, b, computeImpact(base, inc));
+      statusEl.textContent = "impact report: " + a + " (baseline) vs " + b;
+    } catch (e) {
+      statusEl.textContent = "impact report failed — is the replay server running?";
+      out.innerHTML = "";
+    }
+  }
+
+  function renderImpact(nameA, nameB, rows) {
+    const out = document.getElementById("cmp-impact-out");
+    const fmt = function (v, u) { return v == null ? "n/a" : (Math.round(v * 10) / 10) + u; };
+    const delta = function (r) {
+      if (r.d == null) return "";
+      const worse = (r.d > 0) === r.worseUp;
+      const sign = r.d >= 0 ? "+" : "";
+      return '<span style="color:' + (Math.abs(r.d) < 0.5 ? "#475569" : (worse ? "#dc2626" : "#16a34a")) +
+        '">' + sign + r.d.toFixed(0) + "% " + (Math.abs(r.d) < 0.5 ? "" : (worse ? "worse" : "better")) + "</span>";
+    };
+    const head = "<tr><th style='text-align:left'>metric</th><th>" + esc(nameA) +
+      "</th><th>" + esc(nameB) + "</th><th>Δ</th></tr>";
+    const body = rows.map(function (r) {
+      return "<tr><td style='text-align:left'>" + esc(r.k) + "</td><td>" + fmt(r.b, r.unit) +
+        "</td><td>" + fmt(r.i, r.unit) + "</td><td>" + delta(r) + "</td></tr>";
+    }).join("");
+    out.innerHTML = "<table class='counts-table'><thead>" + head + "</thead><tbody>" + body +
+      "</tbody></table><div class='hint' style='margin-top:4px;'>Means/peaks over the selected " +
+      "range; " + esc(nameB) + " vs " + esc(nameA) + " baseline. Narrow the range to the incident " +
+      "for a sharper figure.</div>";
+  }
+
+  const cmpImpactBtn = document.getElementById("cmp-impact");
+  if (cmpImpactBtn) cmpImpactBtn.addEventListener("click", loadImpact);
 
   // ---- CCC intersection counts (from the traffic-count ETL query API) -------
   // Historical Miovision turning counts, served by the query-traffic-counts

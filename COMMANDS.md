@@ -161,6 +161,9 @@ python scripts/run_traci.py --no-gui --emit --emit-host 0.0.0.0 --real-time \
 Run `metrics_writer.py` alongside each so both land in InfluxDB tagged by `scenario_id`.
 Then in the dashboard's **Compare scenarios** panel, enter the two names (e.g. `baseline_am`
 and `crash_arterial`), pick a field/range, and Compare — the two series overlay on one chart.
+The **Impact report** button (same panel) produces a baseline-vs-incident table — avg speed,
+congestion, stopped (mean & peak), vehicles — each with a directional Δ (speed drop /
+congestion rise shown red). Narrow the range to the incident window for a sharper figure.
 
 ---
 

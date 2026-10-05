@@ -87,9 +87,16 @@ Decision-support increments (supersede the old scenario-comparison / alerts line
       non-IT user runs the whole thing from the browser, no command line. 5 unit tests
       (fake Popen). LOCAL/VM only (spawns processes; hosted CloudFront can't reach a
       localhost control server — a cloud start/stop via API Gateway + SSM is a later build).
-- [ ] Inc 4: Impact metrics / reporting (added delay, queue length, affected area) (~10h) ← NEXT
-      The full version of what Inc 2's compare summary line previews (windowed to the incident
-      period, not a whole-range mean).
+- [x] Inc 4 (v1): Impact report — DONE (wk of 5 Oct). An "Impact report" button on the
+      Compare panel computes baseline-vs-incident impact from the stored metrics over the
+      selected range: avg speed (km/h) + drop%, congestion index + rise, stopped (mean & peak),
+      vehicles (mean), each with a directional Δ (speed drop / congestion rise = worse, red).
+      Pure `computeImpact()` uses per-series aggregates (mean/max) — no timestamp alignment
+      (the two runs happen at different wall-clock times). Fetches raw points (no aggregation)
+      so peaks are real. Reuses the Compare panel's two scenario_id inputs + range.
+      v2 (deferred, +4–5h): true per-vehicle delay via `traci.vehicle.getTimeLoss` and
+      affected-area (distinct congested edges) — both need new emitted fields; worth it only
+      if time allows. Recovery-time also deferred (needs careful post-reopen alignment).
 
 Future extension (deferred by choice, not scheduled yet):
 - [ ] Incident REROUTING / detours (~6–9h incl. on-VM tuning): when an edge is closed,

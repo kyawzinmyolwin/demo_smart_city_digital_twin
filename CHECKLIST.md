@@ -23,11 +23,12 @@ _Updated 2026-10-03._
 - [x] Click-to-inject (local ws) — close a road live from the map, with a **Close live ↔ Reopen road** toggle (block then resume in one run) + a visible sim clock
 - [x] GUI scenario control (`control_server.py` + panel) — start/stop from the browser, no CLI; **click a road → Start road block** (immediate close from 06:30)
 - [x] Cloud deploy wired (`deploy_dashboard.sh`: live feed, overlay, history, compare on hosted page)
+- [x] Impact report (Inc 4 v1) — baseline-vs-incident metrics table (avg speed, congestion, stopped mean/peak, vehicles) with directional Δ
 
 ## ⏳ To do
 
 ### Committed / planned
-- [ ] **Increment 4 — impact metrics/reporting** (~10h): added delay, peak queue, affected-area, windowed to the incident
+- [ ] **Increment 4 v2 (optional)** — true per-vehicle delay (`timeLoss`) + affected-area; needs new emitted fields
 - [ ] **Milestone 5 — Docker Compose one-command bring-up** (sim + read server + InfluxDB) — proposal-committed, due 19 Oct
 - [ ] **Milestone 5 — GitHub Actions CI/CD** (run the test suite on push) — proposal-committed
 - [ ] Final technical report (evaluate against proposal goals)
