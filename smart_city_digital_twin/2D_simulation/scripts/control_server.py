@@ -105,15 +105,45 @@ def build_roadblock_command(edge: str, *, at: int = ROADBLOCK_AT, duration: int 
 class SimRunner:
     """Owns at most one run_traci.py subprocess (start / stop / status)."""
 
-    def __init__(self, *, popen=subprocess.Popen, script_dir: str = SCRIPTS_DIR) -> None:
+    def __init__(self, *, popen=subprocess.Popen, script_dir: str = SCRIPTS_DIR,
+                 start_writer: bool = True, emit_port: int = 8765) -> None:
         self._popen = popen
         self._script_dir = script_dir
+        self._start_writer = start_writer
+        self._emit_port = emit_port
         self._proc = None
+        self._writer = None
         self._scenario: str | None = None
         self._started_at: float = 0.0
 
     def running(self) -> bool:
         return self._proc is not None and self._proc.poll() is None
+
+    def _spawn_writer(self) -> None:
+        """Also start metrics_writer so the run's metrics land in InfluxDB — the GUI
+        path otherwise leaves History/Compare empty (the 'forgot the writer' trap)."""
+        if not self._start_writer:
+            return
+        cmd = [sys.executable, os.path.join(self._script_dir, "metrics_writer.py"),
+               "--ws-url", f"ws://localhost:{self._emit_port}"]
+        try:
+            self._writer = self._popen(cmd, cwd=os.path.dirname(self._script_dir))
+        except Exception as exc:  # noqa: BLE001 - a missing writer shouldn't fail the sim start
+            print(f"warning: could not start metrics_writer: {exc}")
+            self._writer = None
+
+    def _stop_writer(self) -> None:
+        if self._writer is None:
+            return
+        try:
+            self._writer.terminate()
+            self._writer.wait(timeout=10)
+        except Exception:  # noqa: BLE001
+            try:
+                self._writer.kill()
+            except Exception:  # noqa: BLE001
+                pass
+        self._writer = None
 
     def start(self, scenario: str) -> dict:
         if scenario not in PRESETS:
@@ -125,6 +155,7 @@ class SimRunner:
         self._proc = self._popen(cmd, cwd=os.path.dirname(self._script_dir))
         self._scenario = scenario
         self._started_at = time.time()
+        self._spawn_writer()
         return {"ok": True, "scenario": scenario, "pid": getattr(self._proc, "pid", None)}
 
     def start_roadblock(self, edge: str, *, duration: int | None = None) -> dict:
@@ -137,10 +168,12 @@ class SimRunner:
         self._proc = self._popen(cmd, cwd=os.path.dirname(self._script_dir))
         self._scenario = f"roadblock:{edge}"
         self._started_at = time.time()
+        self._spawn_writer()
         return {"ok": True, "scenario": self._scenario, "edge": edge,
                 "pid": getattr(self._proc, "pid", None)}
 
     def stop(self) -> dict:
+        self._stop_writer()
         if not self.running():
             return {"ok": True, "stopped": False}  # nothing to do
         self._proc.terminate()
@@ -159,6 +192,7 @@ class SimRunner:
             "scenario": self._scenario if run else None,
             "pid": getattr(self._proc, "pid", None) if run else None,
             "uptimeSec": round(time.time() - self._started_at, 1) if run else 0,
+            "writer": self._writer is not None and self._writer.poll() is None,
         }
 
 
@@ -216,9 +250,12 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="Start/stop sim scenarios for the dashboard.")
     ap.add_argument("--host", default="0.0.0.0", help="Bind host (default 0.0.0.0).")
     ap.add_argument("--port", type=int, default=DEFAULT_PORT, help=f"Port (default {DEFAULT_PORT}).")
+    ap.add_argument("--no-writer", action="store_true",
+                    help="Don't auto-start metrics_writer with each scenario (then run it yourself "
+                         "if you want History/Compare data).")
     args = ap.parse_args()
 
-    runner = SimRunner()
+    runner = SimRunner(start_writer=not args.no_writer)
     httpd = ThreadingHTTPServer((args.host, args.port), make_handler(runner))
     print(f"Scenario control server on http://{args.host}:{args.port}  "
           f"(presets: {', '.join(PRESETS)})")

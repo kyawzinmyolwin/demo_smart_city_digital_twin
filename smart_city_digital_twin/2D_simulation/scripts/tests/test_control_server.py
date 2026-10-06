@@ -134,5 +134,30 @@ def test_start_roadblock_lifecycle():
     assert "roadblock" in runner.status()["scenario"]
 
 
+def test_start_also_spawns_writer_and_stop_kills_both():
+    runner, created = _runner()                 # start_writer defaults True
+    runner.start("baseline_am")
+    # two procs spawned: run_traci then metrics_writer
+    assert len(created) == 2
+    assert created[0].cmd[1].endswith("run_traci.py")
+    assert created[1].cmd[1].endswith("metrics_writer.py")
+    assert runner.status()["writer"] is True
+    runner.stop()
+    assert created[1].terminated is True        # writer terminated on stop
+    assert runner.running() is False
+
+
+def test_no_writer_option_spawns_only_the_sim():
+    created = []
+
+    def fake_popen(cmd, cwd=None):
+        p = FakeProc(cmd, cwd); created.append(p); return p
+
+    runner = SimRunner(popen=fake_popen, start_writer=False)
+    runner.start("baseline_am")
+    assert len(created) == 1                     # just run_traci, no writer
+    assert runner.status()["writer"] is False
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-v"]))
