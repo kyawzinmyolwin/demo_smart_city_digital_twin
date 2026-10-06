@@ -116,6 +116,22 @@ fully-wired URL (ws + replay + counts + edges); `dashboard_url.sh` matches. The 
 dashboard serves live vehicles, the road overlay, history and the compare view (the old
 replay-URL 403 is gone — `?replay=` uses the API Gateway endpoint, not the Function URL).
 
+Non-IT usability — DONE (wk of 6 Oct):
+- `control_server.py` now AUTO-STARTS `metrics_writer.py` with each scenario (spawned after
+  the sim, terminated on Stop; `status()` reports `"writer"`; `--no-writer` opts out). This
+  closes the "forgot the writer" trap — the GUI path fills InfluxDB with no separate terminal.
+  New tests in `test_control_server.py` (writer spawned + stopped; `--no-writer` spawns only
+  the sim). 11 unit tests pass.
+- One-command local demo: `start_demo.sh` / `stop_demo.sh` at repo root. `start_demo.sh`
+  brings up the four long-running services — InfluxDB (docker compose → docker-compose →
+  `docker run` fallback, since the VM has no compose), dashboard web :8000 (serves
+  `2D_simulation/`), replay :8788, control :8799 — backgrounded with pidfiles+logs in `.demo/`
+  (gitignored), health-checked, then prints the dashboard URL and the VM ports to forward. It
+  does NOT start the sim/writer — those come from the dashboard's Start button (control_server
+  + auto-writer). `stop_demo.sh` kills by pidfile and stops the InfluxDB container (keeps data;
+  `--wipe` removes the container). Binds 0.0.0.0 by default for VM port-forwarding (`BIND=127.0.0.1`
+  to restrict). So the whole local demo is: `./start_demo.sh` → open the URL → click Start.
+
 Deferred / de-prioritised by the pivot:
 - [~] Historical replay scrub bar (25h) — counts replay is now the baseline, not a headline
       feature; keep only if time allows

@@ -24,6 +24,8 @@ _Updated 2026-10-03._
 - [x] GUI scenario control (`control_server.py` + panel) — start/stop from the browser, no CLI; **click a road → Start road block** (immediate close from 06:30)
 - [x] Cloud deploy wired (`deploy_dashboard.sh`: live feed, overlay, history, compare on hosted page)
 - [x] Impact report (Inc 4 v1) — baseline-vs-incident metrics table (avg speed, congestion, stopped mean/peak, vehicles) with directional Δ
+- [x] Auto-start `metrics_writer` from `control_server.py` with each scenario (stop on Stop; `--no-writer` to opt out) — the GUI path now fills InfluxDB with no separate writer terminal
+- [x] One-command local demo: `start_demo.sh` / `stop_demo.sh` (InfluxDB + dashboard web + replay + control servers, pidfiles/logs in `.demo/`) — a non-IT user runs `./start_demo.sh` then clicks a Start button
 
 ## ⏳ To do
 
@@ -37,9 +39,6 @@ _Updated 2026-10-03._
 - [ ] Final README, screenshots, live demo URL
 - [ ] 2-min demo recording + architecture diagram
 - [ ] CV / LinkedIn write-up
-
-### Nice-to-have enhancements
-- [ ] Auto-start `metrics_writer.py` from `control_server.py` when a scenario starts (and stop it on Stop) — so the GUI path fills InfluxDB without a separate terminal (removes the "forgot the writer" trap)
 
 ### Deferred by choice (not scheduled)
 - [ ] Incident rerouting / detours (~6–9h)

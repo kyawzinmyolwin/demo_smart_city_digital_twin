@@ -14,6 +14,10 @@ env/
 .env
 !.env.example
 
+# --- Local demo launcher (start_demo.sh / stop_demo.sh) ---
+# Pidfiles + logs for the background services; runtime only, never source.
+.demo/
+
 # --- macOS ---
 .DS_Store
 
