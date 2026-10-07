@@ -94,7 +94,27 @@ set -a; [ -f "$ROOT/.env" ] && . "$ROOT/.env"; set +a
 # --- 1. InfluxDB (Docker) ----------------------------------------------------
 # Prefer compose; fall back to a plain `docker run` (the VM often has neither
 # docker-compose v1 nor the v2 plugin).
+# influx_reachable: true if something already answers on the InfluxDB port. This
+# is a NETWORK check (curl → wget → bash /dev/tcp), independent of the Docker
+# socket — so a container started by root/sudo, or when this shell isn't in the
+# docker group, is still detected without any docker permission.
+influx_reachable() {
+  if command -v curl >/dev/null 2>&1; then
+    curl -fsS --max-time 2 "http://localhost:${INFLUX_PORT}/health" >/dev/null 2>&1 && return 0
+  elif command -v wget >/dev/null 2>&1; then
+    wget -q -T 2 -O /dev/null "http://localhost:${INFLUX_PORT}/health" 2>/dev/null && return 0
+  fi
+  # Dependency-free fallback: can we open a TCP connection to the port?
+  (exec 3<>"/dev/tcp/127.0.0.1/${INFLUX_PORT}") 2>/dev/null && { exec 3>&- 3<&-; return 0; }
+  return 1
+}
+
 start_influx() {
+  # If InfluxDB is already up (any way it was started), use it — no docker needed.
+  if influx_reachable; then
+    green "✓ InfluxDB already up on :$INFLUX_PORT — using it"
+    return 0
+  fi
   if ! command -v docker >/dev/null 2>&1; then
     red "• docker not found — skipping InfluxDB. History/Compare won't have data."
     red "  Install Docker, or point the replay server at InfluxDB Cloud via .env."
@@ -103,9 +123,12 @@ start_influx() {
   # The daemon must be reachable before any docker subcommand that talks to it
   # (`docker compose version` succeeds without it and would leak a daemon error).
   if ! docker info >/dev/null 2>&1; then
-    red "• Docker daemon not reachable — skipping InfluxDB."
-    red "  Start Docker (e.g. 'colima start' on macOS, or 'sudo systemctl start docker')."
-    red "  The web/replay/control servers still start; History/Compare just won't have data."
+    red "• Can't reach the Docker daemon from this shell — skipping InfluxDB start."
+    red "  If the daemon is DOWN: start it ('sudo systemctl start docker', or 'colima start' on macOS)."
+    red "  If it's a PERMISSION error (container running under sudo, shell not in the 'docker'"
+    red "  group yet): run 'newgrp docker' or re-open the shell. Nothing to do if InfluxDB is"
+    red "  already up — this check is only skipped because :$INFLUX_PORT wasn't answering."
+    red "  The web/replay/control servers still start regardless."
     return 1
   fi
   if docker ps --format '{{.Names}}' 2>/dev/null | grep -qx cdt-influxdb; then
