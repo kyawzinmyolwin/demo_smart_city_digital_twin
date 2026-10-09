@@ -1,0 +1,98 @@
+# Project checklist — demo_smart_city_digital_twin
+
+COMP 693 Industry Project. Snapshot of what's done and what's left.
+Source of truth for detail is `CLAUDE.md`; this is the quick status view.
+_Updated 2026-10-03._
+
+## ✅ Done
+
+### Core build (Phase 1 + cloud pipeline)
+- [x] JSON emitter + WebSocket server (`run_traci.py --emit`, `emitter.py`) — unit-tested
+- [x] Live dashboard: WebSocket vehicle layer, speed-coloured markers, 3 Chart.js panels, pause/resume
+- [x] Cloud pipeline (Terraform): WebSocket API Gateway → ingest/metrics/replay Lambdas → InfluxDB Cloud; S3+CloudFront; Secrets Manager; billing alarm — deployed & verified
+- [x] Emitter → cloud forwarding (`--emit-target`); on-demand EC2 sim host
+- [x] Local metrics pipeline (`metrics.py`, `metrics_writer.py`) + InfluxDB; history charts
+
+### Decision-support twin (the pivot)
+- [x] Incident-injection hook — close edge/lane, speed limit, demand surge (`incidents.py`, `--incident-file`/`--close-edge`)
+- [x] Edge tooling — `list_edges.py`, `edges_geojson.py`, clickable road overlay
+- [x] ETL → scenario baseline bridge (`scenario_bridge.py`, `fetch_counts_for_date.py`)
+- [x] Scenario-tagged metrics (`--scenario-id` → InfluxDB tag, local + cloud)
+- [x] Compare view (baseline vs incident) + quantified summary line
+- [x] Congestion-alert overlay (slow-segment flagging + red highlight)
+- [x] Click-to-inject (local ws) — close a road live from the map, with a **Close live ↔ Reopen road** toggle (block then resume in one run) + a visible sim clock
+- [x] GUI scenario control (`control_server.py` + panel) — start/stop from the browser, no CLI; **click a road → Start road block** (immediate close from 06:30)
+- [x] Cloud deploy wired (`deploy_dashboard.sh`: live feed, overlay, history, compare on hosted page)
+- [x] Impact report (Inc 4 v1) — baseline-vs-incident metrics table (avg speed, congestion, stopped mean/peak, vehicles) with directional Δ
+- [x] Auto-start `metrics_writer` from `control_server.py` with each scenario (stop on Stop; `--no-writer` to opt out) — the GUI path now fills InfluxDB with no separate writer terminal
+- [x] One-command local demo: `start_demo.sh` / `stop_demo.sh` (InfluxDB + dashboard web + replay + control servers, pidfiles/logs in `.demo/`) — a non-IT user runs `./start_demo.sh` then clicks a Start button
+
+## ⏳ To do
+
+### Committed / planned
+- [ ] **Increment 4 v2 (optional)** — true per-vehicle delay (`timeLoss`) + affected-area; needs new emitted fields
+- [x] **Milestone 5 — Docker Compose one-command bring-up** — `docker compose up` runs the full stack: InfluxDB + sim (SUMO + emitter) + metrics writer + replay read-API + dashboard web. SUMO image via `ppa:sumo/stable` (same recipe as `sim_host.tf`); code/data bind-mounted. See `DOCKER.md`. (`docker-compose.yml`, `docker/sim.Dockerfile`, `docker/app.Dockerfile`)
+- [x] **Milestone 5 — GitHub Actions CI/CD** — `.github/workflows/ci.yml` runs the unit tests on every push/PR, matrix Python 3.11 + 3.12 (both verified green locally: 86 tests = 41 `scripts/tests` + 45 `scripts/etl/tests`). Test deps pinned in `2D_simulation/requirements-dev.txt` (`pytest`, `boto3`, `moto`). Joins the existing `deploy-dashboard.yml` (GitHub Pages)
+- [x] Final technical report (evaluate against proposal goals) — `docs/FINAL_REPORT.md` (objectives, the decision-support pivot, implementation, a proposal-vs-delivered evaluation table, testing/CI, limitations, future work). Word export committed: `docs/FINAL_REPORT.docx` (regenerate from the `.md` after edits)
+  - [ ] **Add screenshots to the report where needed** (dashboard live view, compare view, impact report, congestion overlay) — needs the running system; re-export the `.docx` afterwards
+
+### Phase 3 — portfolio wrap-up
+- [x] Portfolio README (root `README.md`) — what it is, architecture, 3 run paths (Docker/native/AWS), tech stack, testing/CI, doc index
+- [x] Architecture diagram — `docs/ARCHITECTURE.md` (Mermaid: data flow + local + cloud deployment views + component/port reference); summary diagram embedded in README
+- [ ] Screenshots — add to the final report (`FINAL_REPORT.md` → re-export `.docx`) and the README; needs the running system
+- [ ] Live demo URL in the README
+- [ ] 2-min demo recording
+- [ ] CV / LinkedIn write-up
+
+### Deferred by choice (not scheduled)
+- [ ] Incident rerouting / detours (~6–9h)
+- [ ] Cloud control path for click-to-inject + cloud start/stop (API Gateway + SSM)
+- [ ] Historical replay scrub bar — de-prioritised (counts replay is now the baseline)
+
+## 🎯 Recommended allocation of the remaining ~100 h budget
+
+The committed build is done, so this budget is discretionary. Priority: turn "built"
+into "demonstrable + evidenced" first, then add depth that strengthens the
+decision-support claim — not more features. **A = non-negotiable, B = the
+differentiator, C/D = fill the rest.** Biggest single lever: a working hosted URL +
+real scenario results in the report.
+
+### A. Make it demonstrable & evidenced — ~30 h (do first, highest ROI)
+- [ ] Finish the hosted deploy → real public URL: upload dashboard to S3 + CloudFront invalidation; front replay Lambda with API Gateway so History/Compare work on the hosted page (the two CLAUDE.md "Next" items). ~12 h
+- [ ] Run the locked scenarios end-to-end (baseline / crash / roadworks); capture quantified results (Δ speed, congestion rise, recovery) + panel screenshots. ~8 h
+- [ ] Insert results + screenshots into the report (re-export `.docx`) and README; add the live-demo URL. ~6 h
+- [ ] Record the 2-min demo video. ~4 h
+
+### B. Depth that backs the decision-support claim — ~30 h (the differentiator)
+- [ ] Incident rerouting / detours — closures divert instead of crawl (TraCI `adaptTraveltime` + `rerouteTraveltime`, `--no-teleport`). ~6–9 h
+- [ ] Impact report v2 — true per-vehicle delay (`getTimeLoss`), affected-area, recovery-time. ~8–10 h
+- [ ] A third scenario (event demand surge) for breadth. ~4 h
+- [ ] Actually build + run the Docker `sim` image on the VM (so far only `docker compose config`-validated); fix anything. ~4 h
+
+### C. Engineering credibility — ~20 h
+- [ ] End-to-end/integration test (emitter → writer → InfluxDB → replay round-trip), ideally a CI job with an InfluxDB service container. ~8 h
+- [ ] Security-review pass (`/security-review`) over public-facing bits — `control_server` spawn safety, replay input validation, API Gateway. ~4 h
+- [ ] Buffer / loose ends. ~8 h
+
+### D. Career & write-up — ~15 h
+- [ ] CV update + LinkedIn write-up. ~6 h
+- [ ] Export architecture diagrams to PNG, tidy docs, polish the portfolio README. ~5 h
+- [ ] Contingency. ~4 h
+
+### ~0 h but important
+- [ ] Confirm the scope pivot with the supervisor at the next review.
+- [ ] Do **not** spend on the historical-replay scrub bar (old 25 h item) — de-prioritised by the pivot; that time goes to A and B.
+
+## 📌 Loose ends worth closing
+- [ ] Confirm the scope pivot (decision-support twin) with the supervisor at a milestone review
+- [ ] On the hosted page, re-run `terraform apply` + fresh `scenario_id` runs so the cloud compare view has tagged data
+- [ ] Rebuild intersection-graph net if you want the counts→CBD scenarios (needs `christchurch_intersections.net.xml`)
+
+---
+
+**Headline:** the decision-support feature set, **Milestone 5 (Docker Compose + CI/CD)**,
+the portfolio README, the architecture diagrams, and the **final technical report**
+(`.md` + `.docx`) are all complete. What remains is portfolio polish that needs the
+running system — **screenshots** (to drop into the report + README), a live-demo URL, and a
+2-minute demo recording — plus optional enhancements (Increment 4 v2, incident rerouting).
+The committed build is effectively done.

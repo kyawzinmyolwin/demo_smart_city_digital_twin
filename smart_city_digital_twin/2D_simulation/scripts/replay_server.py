@@ -40,6 +40,7 @@ DEFAULT_PORT = 8788
 ALLOWED_FIELDS = {"avgSpeed", "congestionIndex", "vehicleCount", "stoppedCount", "movingCount"}
 _RANGE_RE = re.compile(r"^(-?\d+[smhdwy]|now\(\)|now|\d{4}-\d{2}-\d{2}T[\d:.]+Z)$")
 _EVERY_RE = re.compile(r"^\d+[smhdw]$")
+_SCENARIO_RE = re.compile(r"^[A-Za-z0-9_.:-]{1,64}$")  # guards the Flux scenario_id filter
 
 
 def _load_dotenv() -> None:
@@ -57,20 +58,25 @@ def _load_dotenv() -> None:
             return
 
 
-def build_flux(bucket: str, start: str, stop: str, field: str, every: str | None) -> str:
+def build_flux(bucket: str, start: str, stop: str, field: str, every: str | None,
+               scenario_id: str | None = None) -> str:
     flux = (
         f'from(bucket: "{bucket}")\n'
         f"  |> range(start: {start}, stop: {stop})\n"
         f'  |> filter(fn: (r) => r._measurement == "traffic_metrics")\n'
         f'  |> filter(fn: (r) => r._field == "{field}")\n'
     )
+    if scenario_id:
+        # scenario_id is validated by the caller (_SCENARIO_RE) — safe to interpolate.
+        flux += f'  |> filter(fn: (r) => r.scenario_id == "{scenario_id}")\n'
     if every:
         flux += f"  |> aggregateWindow(every: {every}, fn: mean, createEmpty: false)\n"
     return flux
 
 
-def query_metrics(cfg: dict, start: str, stop: str, field: str, every: str | None) -> list[dict]:
-    flux = build_flux(cfg["bucket"], start, stop, field, every)
+def query_metrics(cfg: dict, start: str, stop: str, field: str, every: str | None,
+                  scenario_id: str | None = None) -> list[dict]:
+    flux = build_flux(cfg["bucket"], start, stop, field, every, scenario_id)
     url = f"{cfg['influx_url']}/api/v2/query?org={cfg['org']}"
     req = urllib.request.Request(
         url,
@@ -136,6 +142,7 @@ def make_handler(cfg: dict):
             stop = q.get("stop", ["now"])[0]
             field = q.get("field", ["avgSpeed"])[0]
             every = q.get("every", [None])[0]
+            scenario_id = q.get("scenario", [None])[0]
 
             if field not in ALLOWED_FIELDS:
                 return self._send(400, {"error": f"field must be one of {sorted(ALLOWED_FIELDS)}"})
@@ -145,14 +152,16 @@ def make_handler(cfg: dict):
                     return self._send(400, {"error": f"invalid {label}"})
             if every is not None and not _EVERY_RE.match(every):
                 return self._send(400, {"error": "invalid every"})
+            if scenario_id is not None and not _SCENARIO_RE.match(scenario_id):
+                return self._send(400, {"error": "invalid scenario"})
 
             try:
-                points = query_metrics(cfg, start, stop, field, every)
+                points = query_metrics(cfg, start, stop, field, every, scenario_id)
             except urllib.error.HTTPError as exc:
                 return self._send(exc.code, {"error": exc.read().decode("utf-8", "replace")})
             except urllib.error.URLError as exc:
                 return self._send(502, {"error": f"InfluxDB unreachable: {exc}"})
-            return self._send(200, {"field": field, "points": points})
+            return self._send(200, {"field": field, "scenario": scenario_id, "points": points})
 
     return ReplayHandler
 
@@ -164,6 +173,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--bucket", default=None)
     p.add_argument("--token", default=None)
     p.add_argument("--port", type=int, default=DEFAULT_PORT)
+    p.add_argument("--host", default="0.0.0.0",
+                   help="Bind host (default 0.0.0.0 so it's reachable through VM port-forwarding; "
+                        "use 127.0.0.1 to restrict to this machine).")
     return p
 
 
@@ -179,8 +191,8 @@ def main() -> int:
     if not cfg["token"] or not cfg["org"]:
         print("Missing INFLUXDB_TOKEN / INFLUXDB_ORG (set via .env or flags).", flush=True)
         return 2
-    server = ThreadingHTTPServer(("localhost", args.port), make_handler(cfg))
-    print(f"Replay server on http://localhost:{args.port}/metrics "
+    server = ThreadingHTTPServer((args.host, args.port), make_handler(cfg))
+    print(f"Replay server on http://{args.host}:{args.port}/metrics "
           f"→ {cfg['influx_url']} (bucket {cfg['bucket']})", flush=True)
     try:
         server.serve_forever()
