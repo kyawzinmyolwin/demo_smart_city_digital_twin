@@ -33,12 +33,14 @@ _Updated 2026-10-03._
 - [ ] **Increment 4 v2 (optional)** — true per-vehicle delay (`timeLoss`) + affected-area; needs new emitted fields
 - [x] **Milestone 5 — Docker Compose one-command bring-up** — `docker compose up` runs the full stack: InfluxDB + sim (SUMO + emitter) + metrics writer + replay read-API + dashboard web. SUMO image via `ppa:sumo/stable` (same recipe as `sim_host.tf`); code/data bind-mounted. See `DOCKER.md`. (`docker-compose.yml`, `docker/sim.Dockerfile`, `docker/app.Dockerfile`)
 - [x] **Milestone 5 — GitHub Actions CI/CD** — `.github/workflows/ci.yml` runs the unit tests on every push/PR, matrix Python 3.11 + 3.12 (both verified green locally: 86 tests = 41 `scripts/tests` + 45 `scripts/etl/tests`). Test deps pinned in `2D_simulation/requirements-dev.txt` (`pytest`, `boto3`, `moto`). Joins the existing `deploy-dashboard.yml` (GitHub Pages)
-- [x] Final technical report (evaluate against proposal goals) — `docs/FINAL_REPORT.md` (objectives, the decision-support pivot, implementation, a proposal-vs-delivered evaluation table, testing/CI, limitations, future work)
+- [x] Final technical report (evaluate against proposal goals) — `docs/FINAL_REPORT.md` (objectives, the decision-support pivot, implementation, a proposal-vs-delivered evaluation table, testing/CI, limitations, future work). Word export committed: `docs/FINAL_REPORT.docx` (regenerate from the `.md` after edits)
+  - [ ] **Add screenshots to the report where needed** (dashboard live view, compare view, impact report, congestion overlay) — needs the running system; re-export the `.docx` afterwards
 
 ### Phase 3 — portfolio wrap-up
 - [x] Portfolio README (root `README.md`) — what it is, architecture, 3 run paths (Docker/native/AWS), tech stack, testing/CI, doc index
 - [x] Architecture diagram — `docs/ARCHITECTURE.md` (Mermaid: data flow + local + cloud deployment views + component/port reference); summary diagram embedded in README
-- [ ] Screenshots + live demo URL in the README
+- [ ] Screenshots — add to the final report (`FINAL_REPORT.md` → re-export `.docx`) and the README; needs the running system
+- [ ] Live demo URL in the README
 - [ ] 2-min demo recording
 - [ ] CV / LinkedIn write-up
 
@@ -55,7 +57,8 @@ _Updated 2026-10-03._
 ---
 
 **Headline:** the decision-support feature set, **Milestone 5 (Docker Compose + CI/CD)**,
-the portfolio README, the architecture diagrams, and the **final technical report** are all
-complete. What remains is portfolio polish that needs the running system — dashboard
-screenshots, a live-demo URL, and a 2-minute demo recording — plus optional enhancements
-(Increment 4 v2, incident rerouting). The committed build is effectively done.
+the portfolio README, the architecture diagrams, and the **final technical report**
+(`.md` + `.docx`) are all complete. What remains is portfolio polish that needs the
+running system — **screenshots** (to drop into the report + README), a live-demo URL, and a
+2-minute demo recording — plus optional enhancements (Increment 4 v2, incident rerouting).
+The committed build is effectively done.

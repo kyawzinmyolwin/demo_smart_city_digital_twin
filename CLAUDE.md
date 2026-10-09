@@ -36,7 +36,11 @@ Project context for Claude Code. Read this before touching any file.
       CI/CD DONE (wk of 9 Oct): `.github/workflows/ci.yml` runs the unit tests on every
       push/PR (matrix Python 3.11 + 3.12; 86 tests green), test deps in
       `2D_simulation/requirements-dev.txt`. Plus the existing `deploy-dashboard.yml` (Pages).
-      Still to do: README, architecture diagram, 2-min demo video.
+      DOCS DONE (wk of 9 Oct): portfolio `README.md` (rewritten from the old SUMO/Unity blurb),
+      `docs/ARCHITECTURE.md` (Mermaid: data-flow + local + cloud views + component/port ref),
+      and the final technical report `docs/FINAL_REPORT.md` + Word export `docs/FINAL_REPORT.docx`
+      (pandoc; regenerate after edits). Still to do: SCREENSHOTS in the report + README (needs
+      the running system — then re-export the `.docx`), a live-demo URL, and the 2-min demo video.
 
 ### Phase 2 — Extension features (~97 hours, Weeks 22–28)
 **DIRECTION CHANGE (2026-09-16): the project pivots to a "scenario / decision-support
@@ -148,7 +152,12 @@ Deferred / de-prioritised by the pivot:
       `sim_host.tf`. Guide: `DOCKER.md`. Local-only, parallel to the AWS deploy.
 
 ### Phase 3 — Portfolio wrap-up (Weeks 29–30)
-- [ ] Final README, screenshots, live demo URL
+- [x] Portfolio README (root `README.md`) + architecture diagrams (`docs/ARCHITECTURE.md`)
+- [x] Final technical report — `docs/FINAL_REPORT.md` (+ `.docx` export)
+- [ ] Screenshots — add to the final report where needed (dashboard live view, compare view,
+      impact report, congestion overlay) + README, then re-export the report `.docx`
+- [ ] Live demo URL
+- [ ] 2-min demo recording
 - [ ] CV update and LinkedIn write-up
 - [ ] Start applying at week 21 — do not wait until hour 300
 
