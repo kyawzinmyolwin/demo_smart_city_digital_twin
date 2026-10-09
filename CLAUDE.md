@@ -32,8 +32,11 @@ Project context for Claude Code. Read this before touching any file.
       3 live Chart.js panels (count / avg speed / congestion) and a pause/resume
       button — all verified live. S3+CloudFront hosting is deployed (infra); still to
       do: upload the HTML to S3, and wire the historical charts to the replay endpoint.
-- [ ] Wk 19–21: CI/CD, docs, demo recording (40h)
-      GitHub Actions pipeline, README, architecture diagram, 2-min demo video
+- [~] Wk 19–21: CI/CD, docs, demo recording (40h)
+      CI/CD DONE (wk of 9 Oct): `.github/workflows/ci.yml` runs the unit tests on every
+      push/PR (matrix Python 3.11 + 3.12; 86 tests green), test deps in
+      `2D_simulation/requirements-dev.txt`. Plus the existing `deploy-dashboard.yml` (Pages).
+      Still to do: README, architecture diagram, 2-min demo video.
 
 ### Phase 2 — Extension features (~97 hours, Weeks 22–28)
 **DIRECTION CHANGE (2026-09-16): the project pivots to a "scenario / decision-support

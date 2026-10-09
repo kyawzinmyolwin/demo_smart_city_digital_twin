@@ -32,7 +32,7 @@ _Updated 2026-10-03._
 ### Committed / planned
 - [ ] **Increment 4 v2 (optional)** — true per-vehicle delay (`timeLoss`) + affected-area; needs new emitted fields
 - [x] **Milestone 5 — Docker Compose one-command bring-up** — `docker compose up` runs the full stack: InfluxDB + sim (SUMO + emitter) + metrics writer + replay read-API + dashboard web. SUMO image via `ppa:sumo/stable` (same recipe as `sim_host.tf`); code/data bind-mounted. See `DOCKER.md`. (`docker-compose.yml`, `docker/sim.Dockerfile`, `docker/app.Dockerfile`)
-- [ ] **Milestone 5 — GitHub Actions CI/CD** (run the test suite on push) — proposal-committed. Suites verified green locally: 41/41 `scripts/tests`, 45/45 `scripts/etl/tests` (needs `pytest`, `boto3`, `moto`)
+- [x] **Milestone 5 — GitHub Actions CI/CD** — `.github/workflows/ci.yml` runs the unit tests on every push/PR, matrix Python 3.11 + 3.12 (both verified green locally: 86 tests = 41 `scripts/tests` + 45 `scripts/etl/tests`). Test deps pinned in `2D_simulation/requirements-dev.txt` (`pytest`, `boto3`, `moto`). Joins the existing `deploy-dashboard.yml` (GitHub Pages)
 - [ ] Final technical report (evaluate against proposal goals)
 
 ### Phase 3 — portfolio wrap-up
