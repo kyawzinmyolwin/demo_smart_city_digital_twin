@@ -31,8 +31,8 @@ _Updated 2026-10-03._
 
 ### Committed / planned
 - [ ] **Increment 4 v2 (optional)** — true per-vehicle delay (`timeLoss`) + affected-area; needs new emitted fields
-- [ ] **Milestone 5 — Docker Compose one-command bring-up** (sim + read server + InfluxDB) — proposal-committed, due 19 Oct
-- [ ] **Milestone 5 — GitHub Actions CI/CD** (run the test suite on push) — proposal-committed
+- [x] **Milestone 5 — Docker Compose one-command bring-up** — `docker compose up` runs the full stack: InfluxDB + sim (SUMO + emitter) + metrics writer + replay read-API + dashboard web. SUMO image via `ppa:sumo/stable` (same recipe as `sim_host.tf`); code/data bind-mounted. See `DOCKER.md`. (`docker-compose.yml`, `docker/sim.Dockerfile`, `docker/app.Dockerfile`)
+- [ ] **Milestone 5 — GitHub Actions CI/CD** (run the test suite on push) — proposal-committed. Suites verified green locally: 41/41 `scripts/tests`, 45/45 `scripts/etl/tests` (needs `pytest`, `boto3`, `moto`)
 - [ ] Final technical report (evaluate against proposal goals)
 
 ### Phase 3 — portfolio wrap-up

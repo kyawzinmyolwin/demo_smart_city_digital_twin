@@ -136,7 +136,13 @@ Deferred / de-prioritised by the pivot:
 - [~] Historical replay scrub bar (25h) — counts replay is now the baseline, not a headline
       feature; keep only if time allows
 - [ ] Threshold metrics panel (12h) — folds into Inc 3's congestion overlay
-- [ ] Docker Compose one-command demo (15h) — still wanted for portfolio
+- [x] Docker Compose one-command demo (15h) — DONE (wk of 9 Oct). `docker compose up` runs
+      the whole local stack: InfluxDB + sim (SUMO via `ppa:sumo/stable` + run_traci --emit) +
+      metrics writer + replay read-API + dashboard web. `docker/sim.Dockerfile` (SUMO) +
+      `docker/app.Dockerfile` (stdlib/py services); code+data bind-mounted (the 2D_simulation
+      tree is ~0.6 GB, so not baked in). Validated with `docker compose config`; build/run not
+      exercised in the cloud dev box (no daemon) but the SUMO recipe matches the verified
+      `sim_host.tf`. Guide: `DOCKER.md`. Local-only, parallel to the AWS deploy.
 
 ### Phase 3 — Portfolio wrap-up (Weeks 29–30)
 - [ ] Final README, screenshots, live demo URL
