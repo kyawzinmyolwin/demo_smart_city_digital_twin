@@ -36,8 +36,10 @@ _Updated 2026-10-03._
 - [ ] Final technical report (evaluate against proposal goals)
 
 ### Phase 3 — portfolio wrap-up
-- [ ] Final README, screenshots, live demo URL
-- [ ] 2-min demo recording + architecture diagram
+- [x] Portfolio README (root `README.md`) — what it is, architecture, 3 run paths (Docker/native/AWS), tech stack, testing/CI, doc index
+- [x] Architecture diagram — `docs/ARCHITECTURE.md` (Mermaid: data flow + local + cloud deployment views + component/port reference); summary diagram embedded in README
+- [ ] Screenshots + live demo URL in the README
+- [ ] 2-min demo recording
 - [ ] CV / LinkedIn write-up
 
 ### Deferred by choice (not scheduled)
