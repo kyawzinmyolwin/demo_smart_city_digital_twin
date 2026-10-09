@@ -49,6 +49,40 @@ _Updated 2026-10-03._
 - [ ] Cloud control path for click-to-inject + cloud start/stop (API Gateway + SSM)
 - [ ] Historical replay scrub bar — de-prioritised (counts replay is now the baseline)
 
+## 🎯 Recommended allocation of the remaining ~100 h budget
+
+The committed build is done, so this budget is discretionary. Priority: turn "built"
+into "demonstrable + evidenced" first, then add depth that strengthens the
+decision-support claim — not more features. **A = non-negotiable, B = the
+differentiator, C/D = fill the rest.** Biggest single lever: a working hosted URL +
+real scenario results in the report.
+
+### A. Make it demonstrable & evidenced — ~30 h (do first, highest ROI)
+- [ ] Finish the hosted deploy → real public URL: upload dashboard to S3 + CloudFront invalidation; front replay Lambda with API Gateway so History/Compare work on the hosted page (the two CLAUDE.md "Next" items). ~12 h
+- [ ] Run the locked scenarios end-to-end (baseline / crash / roadworks); capture quantified results (Δ speed, congestion rise, recovery) + panel screenshots. ~8 h
+- [ ] Insert results + screenshots into the report (re-export `.docx`) and README; add the live-demo URL. ~6 h
+- [ ] Record the 2-min demo video. ~4 h
+
+### B. Depth that backs the decision-support claim — ~30 h (the differentiator)
+- [ ] Incident rerouting / detours — closures divert instead of crawl (TraCI `adaptTraveltime` + `rerouteTraveltime`, `--no-teleport`). ~6–9 h
+- [ ] Impact report v2 — true per-vehicle delay (`getTimeLoss`), affected-area, recovery-time. ~8–10 h
+- [ ] A third scenario (event demand surge) for breadth. ~4 h
+- [ ] Actually build + run the Docker `sim` image on the VM (so far only `docker compose config`-validated); fix anything. ~4 h
+
+### C. Engineering credibility — ~20 h
+- [ ] End-to-end/integration test (emitter → writer → InfluxDB → replay round-trip), ideally a CI job with an InfluxDB service container. ~8 h
+- [ ] Security-review pass (`/security-review`) over public-facing bits — `control_server` spawn safety, replay input validation, API Gateway. ~4 h
+- [ ] Buffer / loose ends. ~8 h
+
+### D. Career & write-up — ~15 h
+- [ ] CV update + LinkedIn write-up. ~6 h
+- [ ] Export architecture diagrams to PNG, tidy docs, polish the portfolio README. ~5 h
+- [ ] Contingency. ~4 h
+
+### ~0 h but important
+- [ ] Confirm the scope pivot with the supervisor at the next review.
+- [ ] Do **not** spend on the historical-replay scrub bar (old 25 h item) — de-prioritised by the pivot; that time goes to A and B.
+
 ## 📌 Loose ends worth closing
 - [ ] Confirm the scope pivot (decision-support twin) with the supervisor at a milestone review
 - [ ] On the hosted page, re-run `terraform apply` + fresh `scenario_id` runs so the cloud compare view has tagged data
