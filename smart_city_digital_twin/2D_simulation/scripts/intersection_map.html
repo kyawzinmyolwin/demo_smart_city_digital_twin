@@ -88,11 +88,25 @@
     .counts-table { border-collapse: collapse; width: 100%; font-size: 10.5px; }
     .counts-table th, .counts-table td { border-bottom: 1px solid #e2e8f0; padding: 2px 5px; text-align: left; white-space: nowrap; }
     .counts-table th { color: #475569; font-weight: 600; position: sticky; top: 0; background: #fff; }
+    /* Collapsible panels: a toggle folds a panel down to just its title bar so it
+       stops covering the map. When collapsed, hide every direct child except the
+       toggle and the marked title. */
+    .panel, .charts-panel { position: absolute; }
+    .panel-collapse {
+      position: absolute; top: 6px; right: 8px; margin: 0 !important; padding: 0 6px !important;
+      border: none; background: transparent; cursor: pointer;
+      font-size: 18px; line-height: 1; color: #475569; z-index: 2;
+    }
+    .panel .panel-title, .charts-panel .panel-title { padding-right: 20px; } /* room for the toggle */
+    .panel.is-collapsed > :not(.panel-collapse):not(.panel-title),
+    .charts-panel.is-collapsed > :not(.panel-collapse):not(.panel-title) { display: none; }
+    .panel.is-collapsed .panel-title, .charts-panel.is-collapsed .panel-title { margin-bottom: 0; }
   </style>
 </head>
 <body>
   <div class="panel">
-    <strong>Intersections + network (from CSV)</strong>
+    <button type="button" class="panel-collapse" title="Collapse/expand this panel" aria-label="Collapse panel">–</button>
+    <strong class="panel-title">Intersections + network (from CSV)</strong>
     <span id="count">…</span> nodes · <span id="ecount">…</span> links · arrows by each neighbour (end of link)
     <div><button type="button" id="btn-reload">Reload CSV</button></div>
     <div id="status"></div>
@@ -196,7 +210,8 @@
   </div>
   <div id="map"></div>
   <div class="charts-panel" id="charts-panel">
-    <strong>Live metrics</strong>
+    <button type="button" class="panel-collapse" title="Collapse/expand this panel" aria-label="Collapse panel">–</button>
+    <strong class="panel-title">Live metrics</strong>
     <div class="chart-title">Vehicles on network</div>
     <div class="chart-box"><canvas id="chart-count"></canvas></div>
     <div class="chart-title">Average speed (km/h)</div>
@@ -1653,6 +1668,18 @@
 
   if (scnStop) scnStop.addEventListener("click", scnStopSim);
   scnInit();
+  // -------------------------------------------------------------------------
+
+  // --- Collapsible panels: fold a panel to its title bar so it stops covering the map ---
+  document.querySelectorAll(".panel-collapse").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      const panel = btn.closest(".panel, .charts-panel");
+      if (!panel) return;
+      const collapsed = panel.classList.toggle("is-collapsed");
+      btn.textContent = collapsed ? "+" : "–";
+      btn.setAttribute("aria-label", collapsed ? "Expand panel" : "Collapse panel");
+    });
+  });
   // -------------------------------------------------------------------------
 
   loadFromFetch().catch(function () {
