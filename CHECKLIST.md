@@ -46,6 +46,20 @@ _Updated 2026-10-03._
 - [ ] 2-min demo recording
 - [ ] CV / LinkedIn write-up
 
+### Planned improvements (to add later)
+- [ ] **More scenario comparisons — unique per-edge road-block id + extra presets.**
+      (1) Tag each click-a-road closure with a **unique `scenario_id` per edge** (e.g.
+      `rb_<sanitised-edge>`, stripping chars not in the scenario filter `[A-Za-z0-9_.:-]`)
+      instead of the shared `"roadblock"`, so two different closures are independently
+      comparable — makes every road on the map its own comparable scenario.
+      (2) Add **2–3 more preset buttons** for variety (e.g. full-morning closure of the
+      known arterial `770109405#0`, a reduced-speed corridor, a demand surge via an
+      `--incident-file`). Edit BOTH registries in sync — `scripts/control_server.py`
+      (local, restart) and `infra/functions/traffic_control/handler.py` (cloud,
+      `terraform apply` repackages the Lambda) — and update the unit tests
+      (`test_control_server.py`, `test_cloud_control.py`). See `docs/Q&A.md` Q2 for
+      rationale. Low-risk, high demo value.
+
 ### Deferred by choice (not scheduled)
 - [ ] Incident rerouting / detours (~6–9h)
 - [x] **Cloud control path** — DONE (wk of 12 Oct): authenticated HTTP API → authorizer + `traffic-control` Lambda → SSM restarts the sim host's `sumo-emitter` with the chosen preset/road-block. Same dashboard panel via `?control=&token=`. `infra/control_api.tf`, `infra/functions/traffic_control|control_authorizer`, parameterised sim-host userdata, token header in the dashboard; 9 tests (100 total). Guide `docs/CLOUD_CONTROL.md`. **Pending: `terraform apply` on your account (needs `sim_host_enabled=true`).**
