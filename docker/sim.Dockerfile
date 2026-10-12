@@ -13,9 +13,12 @@ FROM ubuntu:22.04
 ENV DEBIAN_FRONTEND=noninteractive
 ENV SUMO_HOME=/usr/share/sumo
 
+# gnupg + dirmngr are needed for add-apt-repository to import the PPA signing key
+# on a minimal base image (they are NOT in ubuntu:22.04); without them the PPA add
+# or the following apt-get update fails. ppa:sumo/stable supports jammy (22.04).
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
-      software-properties-common ca-certificates python3 python3-pip \
+      software-properties-common ca-certificates gnupg dirmngr python3 python3-pip \
  && add-apt-repository -y ppa:sumo/stable \
  && apt-get update \
  && apt-get install -y --no-install-recommends sumo sumo-tools \
