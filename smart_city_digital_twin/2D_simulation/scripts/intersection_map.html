@@ -145,6 +145,7 @@
         <span class="legend-dot" style="background:#16a34a;"></span>free-flow
         <span class="legend-dot" style="background:#f59e0b;"></span>slow
         <span class="legend-dot" style="background:#dc2626;"></span>congested
+        <span class="legend-dot" style="background:#111827;"></span>closed road
       </div>
       <div class="legend">
         <span class="legend-dot" style="background:#64748b;"></span>car (circle)
@@ -1358,6 +1359,35 @@
 
   let liveBlocked = false;   // is a live road block currently active (toggle state)
 
+  // --- Blocked-edge highlight: show WHICH road is closed, distinct from congestion ---
+  // Closed = near-black, thick, dashed (reads as "barred"); congestion = red; default = purple.
+  const BLOCKED_STYLE = { color: "#111827", weight: 6, opacity: 0.95, dashArray: "8 7" };
+  const DEFAULT_EDGE_STYLE = { color: "#7c3aed", weight: 2, opacity: 0.6 };
+  const blockedEdges = {};            // edge id -> true while drawn as closed
+  // Presets that close a known edge, so starting them highlights it too.
+  const PRESET_BLOCK_EDGES = { crash_arterial: "770109405#0" };
+
+  async function ensureEdgesVisible() {
+    const ok = await loadEdges();
+    if (ok) { edgeGeoLayer.addTo(map); if (edgesToggle) edgesToggle.checked = true; }
+    return ok;
+  }
+  async function markBlocked(edgeId) {
+    if (!edgeId) return;
+    await ensureEdgesVisible();       // auto-show the roads so the closure is visible
+    blockedEdges[edgeId] = true;
+    const pl = edgePolylines[edgeId];
+    if (pl) pl.setStyle(BLOCKED_STYLE);
+  }
+  function clearBlocked(edgeId) {
+    const ids = edgeId ? [edgeId] : Object.keys(blockedEdges);
+    ids.forEach(function (id) {
+      delete blockedEdges[id];
+      const pl = edgePolylines[id];
+      if (pl) pl.setStyle(DEFAULT_EDGE_STYLE);
+    });
+  }
+
   function onEdgeClick(feat) {
     return function () {
       const id = feat.properties.id;
@@ -1381,12 +1411,14 @@
           const ok = sendControl({ action: "incident", type: "close_edge", edge: id });
           if (!ok) { st().textContent = "not connected to a live emitter (Connect first; local ws only)"; return; }
           liveBlocked = true; paint();
+          markBlocked(id);                       // show the closed road on the map
           st().textContent = "closed " + id + " live — click again to reopen";
         } else {
           // lift all active live closures; traffic recovers as the queue drains
           const ok = sendControl({ action: "reopen" });
           if (!ok) { st().textContent = "not connected to a live emitter"; return; }
           liveBlocked = false; paint();
+          clearBlocked();                        // reopen lifts all closures
           st().textContent = "reopened — traffic will recover as the queue drains";
         }
       });
@@ -1471,14 +1503,15 @@
     const nowAlert = {};
     alerts.forEach(function (a) {
       nowAlert[a.edge] = true;
+      if (blockedEdges[a.edge]) return;          // a closed road keeps its blocked style
       const pl = edgePolylines[a.edge];
       if (pl) { pl.setStyle({ color: "#dc2626", weight: 5, opacity: 0.9 }); highlighted[a.edge] = true; }
     });
-    // reset edges that recovered
+    // reset edges that recovered (back to blocked style if still closed, else default)
     Object.keys(highlighted).forEach(function (edge) {
       if (!nowAlert[edge]) {
         const pl = edgePolylines[edge];
-        if (pl) pl.setStyle({ color: "#7c3aed", weight: 2, opacity: 0.6 });
+        if (pl) pl.setStyle(blockedEdges[edge] ? BLOCKED_STYLE : DEFAULT_EDGE_STYLE);
         delete highlighted[edge];
       }
     });
@@ -1564,6 +1597,8 @@
       const data = await resp.json();
       if (!data.ok) { scnSet("could not start: " + (data.error || resp.status)); return; }
       scnSet("started " + id + " — connecting…");
+      clearBlocked();                                   // fresh run: drop any stale closure
+      if (PRESET_BLOCK_EDGES[id]) markBlocked(PRESET_BLOCK_EDGES[id]);  // highlight a preset's closed edge
       setTimeout(function () { if (!ws) connectWs(); }, 2500);   // let the emitter bind first
       scnPoll();
     } catch (e) { scnSet("start failed — is the control server running?"); }
@@ -1574,6 +1609,7 @@
     try {
       await scnFetch("/stop", { method: "POST" });
       scnSet("stopped");
+      clearBlocked();                                   // no run, no closure
       scnPoll();
     } catch (e) { scnSet("stop failed"); }
   }
@@ -1606,6 +1642,7 @@
       const data = await resp.json();
       if (!data.ok) { scnSet("could not start: " + (data.error || resp.status)); return; }
       scnSet("road block on " + edge + " (closed from the start, 06:30) — connecting…");
+      clearBlocked(); markBlocked(edge);                // highlight the closed road
       setTimeout(function () { if (!ws) connectWs(); }, 2500);   // let the emitter bind first
       scnPoll();
     } catch (e) { scnSet("start failed — is the control server running?"); }
