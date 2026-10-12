@@ -55,14 +55,20 @@ resource "aws_iam_role_policy" "control_inline" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid    = "RunCommandOnSimHostOnly"
-        Effect = "Allow"
-        Action = ["ssm:SendCommand"]
-        Resource = [
-          "arn:aws:ssm:${var.aws_region}::document/AWS-RunShellScript",
-          "arn:aws:ec2:${var.aws_region}:*:instance/*"
-        ]
+        # The RunShellScript document itself carries no tag, so it gets an
+        # unconditioned allow (a tag condition here would deny it — the bug this
+        # fixes). Safe: the document can only run against instances also allowed below.
+        Sid      = "UseRunShellScriptDocument"
+        Effect   = "Allow"
+        Action   = ["ssm:SendCommand"]
+        Resource = "arn:aws:ssm:${var.aws_region}::document/AWS-RunShellScript"
+      },
+      {
         # Restrict the instance target to our sim host by tag.
+        Sid      = "SendCommandToSimHostOnly"
+        Effect   = "Allow"
+        Action   = ["ssm:SendCommand"]
+        Resource = "arn:aws:ec2:${var.aws_region}:*:instance/*"
         Condition = { StringEquals = { "ssm:resourceTag/Name" = "${local.name_prefix}-sim-host" } }
       },
       {
