@@ -1519,6 +1519,17 @@
   // --- Scenario control: start/stop the sim from the browser (control_server) ---
   const CONTROL_URL = (new URLSearchParams(window.location.search).get("control") || "").trim()
     || "http://localhost:8799";
+  // Optional shared token for an authenticated control endpoint (the cloud control
+  // API). Sent as a bearer header; local control_server ignores it. Set via
+  // ?token=<...>. Never hard-code a token in the page.
+  const CONTROL_TOKEN = (new URLSearchParams(window.location.search).get("token") || "").trim();
+  function scnFetch(path, opts) {
+    opts = Object.assign({}, opts);
+    if (CONTROL_TOKEN) {
+      opts.headers = Object.assign({}, opts.headers, { "Authorization": "Bearer " + CONTROL_TOKEN });
+    }
+    return fetch(CONTROL_URL + path, opts);
+  }
   const scnButtons = document.getElementById("scn-buttons");
   const scnStop = document.getElementById("scn-stop");
   const scnStatus = document.getElementById("scn-status");
@@ -1528,7 +1539,7 @@
 
   async function scnInit() {
     try {
-      const resp = await fetch(CONTROL_URL + "/scenarios");
+      const resp = await scnFetch("/scenarios");
       if (!resp.ok) throw new Error("HTTP " + resp.status);
       const data = await resp.json();
       (data.scenarios || []).forEach(function (s) {
@@ -1549,7 +1560,7 @@
   async function scnStart(id) {
     scnSet("starting " + id + "…");
     try {
-      const resp = await fetch(CONTROL_URL + "/start?scenario=" + encodeURIComponent(id), { method: "POST" });
+      const resp = await scnFetch("/start?scenario=" + encodeURIComponent(id), { method: "POST" });
       const data = await resp.json();
       if (!data.ok) { scnSet("could not start: " + (data.error || resp.status)); return; }
       scnSet("started " + id + " — connecting…");
@@ -1561,7 +1572,7 @@
   async function scnStopSim() {
     scnSet("stopping…");
     try {
-      await fetch(CONTROL_URL + "/stop", { method: "POST" });
+      await scnFetch("/stop", { method: "POST" });
       scnSet("stopped");
       scnPoll();
     } catch (e) { scnSet("stop failed"); }
@@ -1569,7 +1580,7 @@
 
   async function scnPoll() {
     try {
-      const resp = await fetch(CONTROL_URL + "/status");
+      const resp = await scnFetch("/status");
       const st = await resp.json();
       if (st.running) {
         scnSet("running " + st.scenario + " (" + Math.round(st.uptimeSec) + "s)");
@@ -1590,7 +1601,7 @@
     if (!edge) { scnSet("click a road on the map, or type an edge id, first"); return; }
     scnSet("starting road block on " + edge + "…");
     try {
-      const resp = await fetch(CONTROL_URL + "/start_roadblock?edge=" + encodeURIComponent(edge),
+      const resp = await scnFetch("/start_roadblock?edge=" + encodeURIComponent(edge),
                                { method: "POST" });
       const data = await resp.json();
       if (!data.ok) { scnSet("could not start: " + (data.error || resp.status)); return; }

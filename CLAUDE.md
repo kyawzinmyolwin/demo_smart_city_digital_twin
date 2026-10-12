@@ -114,9 +114,19 @@ Future extension (deferred by choice, not scheduled yet):
       teleporting through. NOT a proposal M4 feature — an enhancement to the incident hook;
       considered and deliberately deferred (2026-09) to protect Inc 2 (the on-schedule,
       proposal-committed scenario comparison) and the untouched M5. Do after Inc 3 (now done).
-- [ ] Cloud control path for click-to-inject: Inc 3's click-to-inject is local-ws only;
-      driving it over the deployed cloud dashboard needs a control route + the producer
-      holding an inbound connection. Larger build, deferred.
+- [x] Cloud control path — DONE (wk of 12 Oct). The HOSTED dashboard can now start/stop
+      named-preset runs + start a road-block on a clicked edge, over the cloud. New
+      `infra/control_api.tf`: an authenticated HTTP API → `control-authorizer` Lambda
+      (shared-token check) → `traffic-control` Lambda that SSM-rewrites the sim host's
+      `/etc/sumo-emitter.env` scenario args and restarts the service (sim host userdata
+      parameterised with an `EnvironmentFile` + `$SCENARIO_ARGS`). Mirrors
+      control_server.py's routes (`/scenarios`,`/status`,`/start`,`/stop`,`/start_roadblock`)
+      so the SAME dashboard panel drives it — just `?control=<api>&token=<token>` (a
+      `scnFetch` helper sends the bearer header). SAFETY: preset allowlist + validated edge
+      only (no arbitrary args); least-priv IAM (ssm:SendCommand restricted to the sim host
+      by tag). 9 unit tests (`test_cloud_control.py`). Guide: `docs/CLOUD_CONTROL.md`.
+      v1 limits: sim host must already be running (/start switches scenario, doesn't boot
+      EC2); presets + click-a-road (not a free-form builder). Not yet `terraform apply`-ed.
 
 Deploy polish — DONE: `deploy_dashboard.sh` now ships `edges.geojson` and prints the
 fully-wired URL (ws + replay + counts + edges); `dashboard_url.sh` matches. The hosted

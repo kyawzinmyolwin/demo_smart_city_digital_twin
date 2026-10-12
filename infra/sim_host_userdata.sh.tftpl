@@ -18,6 +18,13 @@ cd demo_smart_city_digital_twin/smart_city_digital_twin
 python3 -m venv .venv
 ./.venv/bin/pip install -r 2D_simulation/requirements.txt
 
+# Scenario args live in an env file the control Lambda rewrites via SSM to switch
+# scenarios (then restarts the service). $SCENARIO_ARGS is split on whitespace by
+# systemd into separate arguments. Default = the calibrated morning baseline.
+cat > /etc/sumo-emitter.env <<'ENVF'
+SCENARIO_ARGS=--real-time --speed 5 --jump-to 23400 --end 27000 --scenario-id baseline_am
+ENVF
+
 # Run the emitter as a service, forwarding to the cloud API Gateway
 cat > /etc/systemd/system/sumo-emitter.service <<UNIT
 [Unit]
@@ -27,8 +34,9 @@ Wants=network-online.target
 
 [Service]
 Environment=SUMO_HOME=/usr/share/sumo
+EnvironmentFile=-/etc/sumo-emitter.env
 WorkingDirectory=/opt/demo_smart_city_digital_twin/smart_city_digital_twin/2D_simulation
-ExecStart=/opt/demo_smart_city_digital_twin/smart_city_digital_twin/.venv/bin/python scripts/run_traci.py --no-gui --emit-interval 10 --emit-target "${ws_url}"
+ExecStart=/opt/demo_smart_city_digital_twin/smart_city_digital_twin/.venv/bin/python scripts/run_traci.py --no-gui --emit-interval 10 --emit-target "${ws_url}" $SCENARIO_ARGS
 Restart=always
 RestartSec=5
 

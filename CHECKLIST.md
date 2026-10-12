@@ -48,7 +48,7 @@ _Updated 2026-10-03._
 
 ### Deferred by choice (not scheduled)
 - [ ] Incident rerouting / detours (~6–9h)
-- [ ] Cloud control path for click-to-inject + cloud start/stop (API Gateway + SSM)
+- [x] **Cloud control path** — DONE (wk of 12 Oct): authenticated HTTP API → authorizer + `traffic-control` Lambda → SSM restarts the sim host's `sumo-emitter` with the chosen preset/road-block. Same dashboard panel via `?control=&token=`. `infra/control_api.tf`, `infra/functions/traffic_control|control_authorizer`, parameterised sim-host userdata, token header in the dashboard; 9 tests (100 total). Guide `docs/CLOUD_CONTROL.md`. **Pending: `terraform apply` on your account (needs `sim_host_enabled=true`).**
 - [ ] Historical replay scrub bar — de-prioritised (counts replay is now the baseline)
 
 ## 🎯 Recommended allocation of the remaining ~100 h budget
