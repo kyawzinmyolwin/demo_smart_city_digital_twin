@@ -85,6 +85,17 @@ variable "sim_host_instance_type" {
   default     = "t3.medium"
 }
 
+variable "sim_host_git_ref" {
+  description = <<-EOT
+    Git ref (branch, tag or commit) the sim host checks out when it boots. Defaults
+    to the repo default branch (main). Set to a feature branch to demo work that
+    isn't merged yet, e.g. -var 'sim_host_git_ref=claude/next-step-nun1nw'. Changing
+    this replaces the instance (user_data change), so it re-clones the chosen ref.
+  EOT
+  type        = string
+  default     = "main"
+}
+
 # --- ETL: CCC traffic-count workbooks (etl.tf) --------------------------------
 variable "etl_data_bucket_name" {
   description = <<-EOT

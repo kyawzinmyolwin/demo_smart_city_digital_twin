@@ -9,10 +9,14 @@ add-apt-repository -y ppa:sumo/stable
 apt-get update
 apt-get install -y sumo sumo-tools
 
-# Get the code (public repo)
+# Get the code (public repo). Check out the requested ref (branch/tag/commit) so
+# the box runs the same code as your working branch — default is the repo default
+# branch (main). Set var.sim_host_git_ref to demo from a feature branch.
 cd /opt
 git clone https://github.com/kyawzinmyolwin/demo_smart_city_digital_twin.git
-cd demo_smart_city_digital_twin/smart_city_digital_twin
+cd demo_smart_city_digital_twin
+git checkout "${git_ref}"
+cd smart_city_digital_twin
 
 # Python venv + deps
 python3 -m venv .venv

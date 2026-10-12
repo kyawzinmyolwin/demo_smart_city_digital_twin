@@ -46,9 +46,16 @@ Terraform: `infra/control_api.tf` (+ `infra/functions/traffic_control/`,
 1. **Bring up the sim host** (it must be running during the demo) and apply:
    ```bash
    cd infra
-   terraform apply -var 'sim_host_enabled=true'
+   terraform apply -var 'sim_host_enabled=true' \
+                   -var 'sim_host_git_ref=claude/next-step-nun1nw'
    ```
    Wait ~2–3 min after apply for the box to boot, install SUMO and start the service.
+
+   > **Important:** the EC2 sim host clones the repo and checks out `sim_host_git_ref`
+   > (default `main`). The scenario flags (`--scenario-id`, `--close-edge`, `--real-time`)
+   > live on the feature branch, so until that branch is merged to `main` you **must**
+   > pass `-var 'sim_host_git_ref=<branch>'` — otherwise the box runs old code and every
+   > scenario Start fails with "unrecognized arguments". Once merged to `main`, drop the var.
 
 2. **Get the endpoint + token:**
    ```bash
