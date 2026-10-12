@@ -1,222 +1,297 @@
-# Final Technical Report — Christchurch Smart-City Digital Twin
+**COMP 693 Industry Project — Final Report**
 
-**COMP 693 Industry Project · Lincoln University, NZ**
-Repository: `kyawzinmyolwin/demo_smart_city_digital_twin`
+**Project title:** Christchurch Smart-City Decision-Support Digital Twin
+
+**Project type:** Independent Project
+
+**Submitted by:** [Name: to complete]
+**Student ID:** [to complete]
+**Host Company:** [to complete — independent project; state "N/A (independent project)" if none]
+**Name of Mentor / Supervisor:** [to complete]
+**Mentor Email:** [to complete]
+**Company Address:** [to complete — or "N/A"]
+**Date:** [submission date]
+
+**Lincoln University**
 
 ---
 
-## 1. Executive summary
+## Executive Summary
 
-The project delivers a **decision-support traffic digital twin** of the
-Christchurch central city. A calibrated SUMO micro-simulation — built from real
-Christchurch City Council, OpenStreetMap, and Miovision data — streams live vehicle
-state to a browser dashboard and to a cloud time-series pipeline. On top of that
-real-time backbone, the twin can be **perturbed** (close a road, stage a crash, add
-an event surge) and the impact **measured** against a real-data-calibrated baseline.
+*(Target ~150 words.)*
 
-All core objectives from the proposal were met, and the headline extension feature
-set was redirected mid-project (with rationale, §3) from passive historical replay to
-active **what-if decision support** — the defining purpose of a digital twin. Both
-committed Milestone-5 engineering deliverables (Docker Compose one-command demo and
-GitHub Actions CI/CD) are complete, alongside documentation and this report.
+**Problem Addressed:** Transport planners need to anticipate how incidents — crashes,
+road closures, event surges — affect central-city traffic, but Christchurch's open
+data is historical and download-only, with no live, interactive way to test "what-if"
+scenarios on a realistic model.
 
-**At a glance**
+**Goal:** Build a decision-support digital twin of the Christchurch CBD that streams a
+calibrated SUMO simulation in real time, lets a user inject incidents from the browser,
+and measures their impact against a real-data baseline, backed by a cloud data pipeline.
 
-| Area | Outcome |
+**Methods:** Extended an existing SUMO model with a WebSocket emitter; built an AWS
+serverless pipeline (API Gateway, Lambda, InfluxDB Cloud) as Terraform infrastructure-
+as-code; extended a Leaflet/Chart.js dashboard with incident injection, scenario
+comparison and impact reporting; packaged it with Docker Compose and GitHub Actions CI.
+
+**Outcome:** A working, tested (91 unit tests, CI on two Python versions), reproducibly
+deployable twin. Strengths: real-time operation and an honest baseline-vs-incident
+comparison runnable with one command. Limitations: incidents are synthetic, and a
+closure caps speed rather than rerouting traffic.
+
+---
+
+## Authorship Statement
+
+This report and the accompanying software were prepared with the assistance of
+generative-AI tools, disclosed here in the interest of academic integrity.
+
+- **Tool:** Claude Code (Anthropic) — an AI coding assistant.
+- **Why it was used:** to accelerate implementation, testing, infrastructure-as-code,
+  documentation, and the drafting of this report.
+- **How it was used:** under my direction, to draft and refactor code, generate unit
+  tests, scaffold Terraform, produce diagrams and documentation, and draft report prose
+  from project artefacts. I defined the goals and design decisions, reviewed and
+  validated all generated code and text, ran and verified the tests and the system, and
+  am responsible for the final content.
+
+*(Please adjust the wording above so it accurately reflects your own working process
+and level of involvement before submitting. See also §5.2.)*
+
+---
+
+## Glossary / Acronyms
+
+| Term / acronym | Meaning |
 |---|---|
-| Real-time emitter + WebSocket | Done, unit-tested, verified live |
-| Cloud pipeline (AWS, Terraform) | Built, deployed, verified end-to-end |
-| Live dashboard | Done + extended with decision-support panels |
-| Decision-support features | Incident injection, scenario compare, impact report, congestion alerts, live click-to-inject |
-| One-command demos | `docker compose up` and `start_demo.sh` |
-| CI/CD | GitHub Actions, 86 tests green on Python 3.11 + 3.12 |
-| Code | ~33 Python modules, 12 Terraform files, a 1,600-line dashboard, 86 unit tests |
+| **Digital twin** | A live, data-driven virtual model of a real system used to monitor and test "what-if" scenarios. |
+| **SUMO** | Simulation of Urban MObility — an open-source microscopic traffic simulator. |
+| **TraCI** | Traffic Control Interface — SUMO's API for controlling a running simulation step-by-step. |
+| **CBD** | Central Business District (here, central Christchurch). |
+| **WebSocket** | A protocol for persistent, two-way, real-time messaging over a single connection. |
+| **IaC** | Infrastructure as Code — provisioning cloud resources from version-controlled definitions. |
+| **Lambda** | AWS serverless function service (runs code without managing servers). |
+| **API Gateway** | AWS managed service exposing HTTP/WebSocket endpoints. |
+| **InfluxDB** | A time-series database, used here for per-tick metrics. |
+| **CI/CD** | Continuous Integration / Continuous Delivery. |
+| **CCC** | Christchurch City Council. |
+| **OSM** | OpenStreetMap. |
+| **Scenario** | A named simulation run (e.g. baseline vs an incident), tagged `scenario_id`. |
+| **Congestion index** | A derived metric summarising how slow/stopped traffic is on a tick. |
 
 ---
 
-## 2. Objectives (from the proposal)
+# 1. INTRODUCTION
 
-The proposal set a 300-hour build across three phases plus an extension budget:
+## 1.1. Overview
 
-- **Phase 1 — real-time data:** extend the existing SUMO simulation to emit vehicle
-  state as JSON over WebSocket every step.
-- **Phase 2 — cloud pipeline:** a public WebSocket endpoint (AWS API Gateway), Lambda
-  metrics aggregation, InfluxDB Cloud storage, infrastructure-as-code (Terraform), and
-  a GitHub Actions CI/CD pipeline.
-- **Phase 3 — live dashboard:** extend the existing Leaflet map with a WebSocket
-  client, speed-coloured vehicle markers, three Chart.js panels (count / average speed
-  / density), a pause/resume control, and static hosting (S3 + CloudFront / Pages).
-- **Extension features (~100 h):** (1) congestion alerts, (2) scenario comparison,
-  (3) historical replay, (4) threshold metrics panel, (5) Docker Compose one-command
-  bring-up.
+This is an **independent software project** undertaken for COMP 693. It does not have an
+external host company; the context is a self-directed portfolio project framed around a
+realistic problem for a transport authority such as the Christchurch City Council, which
+publishes intersection traffic-count and road-geometry open data. The project builds on
+an existing SUMO simulation of the Christchurch central city and extends it into a
+cloud-connected, interactive decision-support tool.
 
-The simulation core (SUMO network, demand, `sim_pipeline.py`, the Unity 3D twin) was
-**pre-existing and out of scope** — everything cloud-, data-, and dashboard-related
-was built in this project. The network and demand are derived from real sources:
-intersection counts and geometry from Christchurch City Council (n.d.), base road
-geometry from OpenStreetMap contributors (n.d.), and turning-movement surveys from
-Miovision (via the Council dataset).
+*(If your proposal framed a specific hypothetical company/service or named a mentor/host,
+replace this paragraph with that framing.)*
 
----
+## 1.2. Problem
 
-## 3. Scope change: the decision-support pivot
+A static simulation answers "what does normal traffic look like?" but not the question a
+planner actually asks: **"what happens if this road closes, or a crash blocks that
+arterial, or an event floods the centre?"** Christchurch's open traffic data is
+historical and download-only — there is no live sensor feed and no interactive way to
+test interventions. Running these experiments by hand (editing simulation configs,
+re-running, manually comparing output) is slow and inaccessible to a non-technical user.
+The problem is therefore to provide a **live, interactive, decision-support twin** that
+can inject incidents into a calibrated model and quantify their impact against a
+baseline, in a form a non-specialist can operate and that an organisation could deploy.
 
-**Decision (2026-09-16):** the Phase-2 extension work pivoted from a *historical
-replay* twin to a *scenario / decision-support* twin.
+## 1.3. Project Team
 
-**Rationale.** Replaying historical counts on the simplified intersection graph is
-*estimation* over sparse, peak-only survey data with known connectivity gaps — hard to
-defend as "real". Injecting incidents into the **strong, calibrated street-network
-model** and measuring the result is (a) the actual point of a digital twin, (b)
-honestly framed as synthetic, and (c) technically smaller, lower-risk work.
-
-**What was kept, not dropped.** The counts → demand ETL pipeline remains as the
-real-data-calibrated **baseline** that incidents are compared against, and as a
-legitimate cloud-engineering showcase (S3 + Lambda ETL, tested).
-
-**Mapping to the proposal.** The pivot *supersedes* two extension line items with
-stronger equivalents and keeps the rest:
-
-| Proposal extension item | Delivered as |
-|---|---|
-| (2) Scenario comparison | **Increment 2** — `scenario_id`-tagged metrics + dashboard compare view + impact report |
-| (1) Congestion alerts | **Increment 3** — live congestion-alert overlay |
-| (4) Threshold metrics panel | Folded into the congestion overlay |
-| (3) Historical replay | De-prioritised (counts replay is now the baseline, not a headline); scrub bar deferred |
-| (5) Docker Compose | **Delivered** (Milestone 5) |
-
-The change was logged in `CLAUDE.md` and is recommended for confirmation with the
-supervisor at a milestone review.
+- **Developer / author:** [Name: to complete] — designed, implemented, tested and
+  documented the solution (independent work).
+- **Academic supervisor / examiner:** [to complete] — guidance and assessment.
+- **Stakeholders / data providers (indirect):** Christchurch City Council and
+  OpenStreetMap, whose open datasets calibrate the model.
+- **AI assistant:** Claude Code (see Authorship Statement and §5.2).
 
 ---
 
-## 4. System architecture
+# 2. REQUIREMENTS AND GOALS
+
+## 2.1. Overview
+
+**Overall goal:** deliver a decision-support digital twin of Christchurch's central-city
+traffic that streams a calibrated simulation in real time, allows incident injection, and
+measures the resulting impact against a baseline, backed by a cloud pipeline.
+
+**Requirements / sub-goals and success metrics:**
+
+| # | Requirement (sub-goal) | Success metric |
+|---|---|---|
+| R1 | Real-time data: emit vehicle state as JSON over WebSocket every simulation step | Live feed received by a browser client within milliseconds of each tick; unit-tested serialiser |
+| R2 | Cloud pipeline: public WebSocket endpoint, metrics aggregation, time-series storage, as IaC | Live ticks reach InfluxDB Cloud via API Gateway + Lambda; all resources defined in Terraform |
+| R3 | Live dashboard: map with speed-coloured vehicles, metric charts, pause/resume, hosted | Vehicles animate; three charts update live; dashboard deployable to S3/CloudFront + Pages |
+| R4 | Decision support: inject an incident and compare it to a baseline with a quantified result | A baseline vs incident run produces a directionally-correct, quantified impact |
+| R5 | Usability: operable by a non-technical user | Whole demo runs from the browser / one command, no command line required to operate |
+| R6 | Engineering quality: tests, CI, reproducible packaging | Automated test suite green in CI; one-command Docker bring-up |
+
+The original proposal set a 300-hour budget across three phases (real-time data; cloud
+pipeline; live dashboard) plus an extension budget for five features (congestion alerts,
+scenario comparison, historical replay, a threshold metrics panel, and Docker Compose).
+Mid-project the extension work was **re-aimed from passive historical replay to active
+what-if decision support** (see §5.1 and §3.3) — the defining purpose of a digital twin —
+while retaining the real-data pipeline as the calibrated baseline.
+
+## 2.2. Comparative Analysis
+
+*(This extends/summarises the comparative study in the proposal. Please merge any
+specific comparisons or citations from your proposal version.)*
+
+- **Simulation engine.** SUMO (Lopez et al., 2018) was chosen over commercial
+  microsimulators (e.g. Aimsun, PTV VISSIM) because it is open-source, scriptable through
+  TraCI for real-time control, and already used for the existing Christchurch model.
+  Mesoscopic/agent frameworks (e.g. MATSim) model demand well but are less suited to the
+  tick-level, per-vehicle real-time streaming this project needs.
+- **Digital-twin framing.** Rather than a purely descriptive dashboard of historical
+  data, the project adopts a *decision-support* framing: perturb a calibrated model and
+  measure impact. This is more defensible than estimating "real" conditions from sparse,
+  peak-only survey counts on a schematic graph.
+- **Time-series store.** InfluxDB (InfluxData, n.d.) was selected for tick data over
+  general-purpose databases and over Prometheus (pull-based, ops-oriented) because it is
+  purpose-built for high-frequency time series and has a free managed tier.
+- **Cloud architecture.** A serverless design (API Gateway + Lambda) was chosen over
+  always-on servers to minimise cost (near-zero idle) and to suit bursty, per-tick
+  ingestion; Terraform provides reproducible, reviewable provisioning.
+- **Deployment / packaging.** Docker Compose gives a portable one-command local demo, a
+  right-sized alternative to a full container-orchestration platform for a project of
+  this scale.
+
+---
+
+# 3. METHODS
+
+## 3.1. Overview
+
+The project followed an **iterative, milestone-driven** approach: each feature was built
+as a small, independently testable increment, committed one logical step at a time on a
+feature branch, and validated by unit tests before integration. A *pure-core / thin-glue*
+design was used throughout — business logic in pure functions tested against fakes and
+mocks, with thin I/O wrappers — so that correctness could be verified without SUMO, the
+cloud, or a network. Progress, decisions and a running budget were tracked in-repository
+(`CLAUDE.md`, `CHECKLIST.md`) and in weekly journals.
+
+**Tools and technologies:** Python (asyncio, websockets, sumolib/TraCI); SUMO; InfluxDB;
+AWS (API Gateway, Lambda, DynamoDB, S3, CloudFront, Secrets Manager, CloudWatch);
+Terraform; Leaflet and Chart.js; Docker / Docker Compose; GitHub and GitHub Actions;
+pytest + moto for testing.
+
+## 3.2. Design
 
 One **producer** (SUMO + the TraCI emitter) feeds one of two interchangeable
 **pipelines** — a local InfluxDB stack or the AWS cloud stack — and a single HTML
-**dashboard** points at whichever endpoints it is given (Figure 1). Full data-flow,
-local, and cloud deployment views plus a component/port reference are in
-[ARCHITECTURE.md](ARCHITECTURE.md).
+**dashboard** points at whichever endpoints it is given (Figure 1).
 
 ![System architecture](img/architecture.png)
 
-*Figure 1. System architecture. The producer (SUMO + `run_traci.py --emit`) streams
-vehicle-state JSON over WebSocket to the dashboard and, in parallel, to a local
-InfluxDB pipeline and/or the AWS cloud pipeline; the dashboard reads history from the
-local replay server or the cloud replay Lambda.*
+*Figure 1. System architecture. The producer (`run_traci.py --emit`) streams
+vehicle-state JSON over WebSocket to the dashboard and, in parallel, to a local InfluxDB
+pipeline and/or the AWS cloud pipeline; the dashboard reads history from the local replay
+server or the cloud replay Lambda. Full data-flow, local and cloud deployment views and a
+component/port reference are in the repository's `docs/ARCHITECTURE.md`.*
 
-The per-tick metric computation (`compute_tick_metrics`) is a **pure function reused
-verbatim** on both pipelines — a local module and the body of the `traffic-metrics`
-Lambda — so local and cloud produce identical metrics.
+**Component interaction.** `run_traci.py` drives SUMO through TraCI and, each tick,
+serialises vehicle state (converted to WGS84) and broadcasts it over WebSocket.
+`metrics_writer.py` consumes that feed, computes per-tick metrics with the pure function
+`compute_tick_metrics`, and writes them to InfluxDB tagged by `simId` and `scenario_id`.
+The dashboard renders the live feed and queries history through a read endpoint
+(`replay_server.py` locally, or a replay Lambda in the cloud). The **same**
+`compute_tick_metrics` function is reused verbatim as the body of the cloud
+`traffic-metrics` Lambda, so local and cloud produce identical metrics. Incidents are
+injected by `incidents.py` (close edge/lane, speed limit, demand surge) with
+apply-and-revert semantics; `control_server.py` lets a non-technical user start named
+scenarios and inject incidents from the browser.
 
----
+## 3.3. Risks and Challenges
 
-## 5. Implementation
+| Risk / challenge | Impact | How it was handled |
+|---|---|---|
+| **Scope risk** — historical replay hard to defend as "real" | Could undermine the project's credibility | Pivoted the extension work to decision-support (what-if incidents) on the strong calibrated model; kept the real-data path as the baseline (logged in `CLAUDE.md`) |
+| **SUMO installation** (no usable macOS binary; wrong PyPI packages) | Blocked local development | Built SUMO from source (documented recipe); used the official Ubuntu PPA in cloud/Docker |
+| **Lambda Function URL returns 403 anonymously** | Hosted dashboard history could not read the cloud | Fronted the replay function with API Gateway instead of a public Function URL |
+| **Local/cloud metric divergence** | Two code paths could drift | Extracted one pure `compute_tick_metrics` used by both the writer and the Lambda |
+| **VM networking** (services unreachable through port-forwarding) | Local demo appeared broken | Bound servers to `0.0.0.0`; documented ports to forward; added Docker-permission guidance |
+| **Secrets Manager destroy/apply conflict**, cost control | Could break redeploys or incur cost | Set zero recovery window; added a \$5 billing alarm and a cost-gated EC2 sim host |
 
-### 5.1 Real-time emitter (Phase 1)
-`run_traci.py --emit` wraps the existing synchronous TraCI loop of SUMO (Lopez et al.,
-2018) in an `asyncio` event loop and broadcasts a JSON snapshot per tick over
-WebSocket (`:8765`); SUMO XY is converted to WGS84 via `sumolib`. New clients get an
-immediate snapshot; tick rate is throttleable (`--emit-interval`). The serialiser
-(`emitter.py::serialize_vehicles`) is unit-tested against a fake `traci` with no SUMO
-dependency. The original non-emit behaviour is untouched.
+## 3.4. Implementation
 
-### 5.2 Incident injection (Increment 1)
-`incidents.py` models closures and perturbations (`close_edge`, `close_lane`,
-`set_speed`, `add_vehicles`) with apply-and-revert semantics, driven by
-`--close-edge`/`--incident-file`/`--scenario-id`. Supporting tooling: edge-picking
-helpers (`list_edges.py`, `edges_geojson.py`) and a clickable road overlay on the map.
+Development proceeded in the proposal's order and then through decision-support
+increments:
 
-### 5.3 Metrics pipeline (Phase 2, local + cloud)
-`metrics.py::compute_tick_metrics` (pure, unit-tested) computes vehicle count, average
-speed, congestion index, and stopped/moving counts. `metrics_writer.py` consumes the
-WebSocket feed and writes to InfluxDB (InfluxData, n.d.), tagged by `simId` **and**
-`scenario_id`. `replay_server.py` is the local read endpoint (Flux range queries,
-CORS, a validated `scenario` filter) — the dev mirror of the `traffic-replay` Lambda.
+1. **Real-time emitter** — `run_traci.py --emit` + `emitter.py` (asyncio WebSocket server,
+   coordinate conversion, snapshot-on-connect, throttling).
+2. **Cloud pipeline** — Terraform `infra/`: WebSocket API Gateway, three Lambdas
+   (ingest/metrics/replay), DynamoDB connections table, S3 + CloudFront, Secrets Manager,
+   CloudWatch + billing alarm; emitter cloud-forwarding mode (`--emit-target`).
+3. **Dashboard** — extended `intersection_map.html` with the live layer, three Chart.js
+   panels, pause/resume, and (later) the decision-support panels.
+4. **Decision-support increments** — incident injection (`incidents.py`), scenario-tagged
+   metrics + compare view, congestion-alert overlay, live click-to-inject with a
+   Close↔Reopen toggle, an impact report, and GUI scenario control (`control_server.py`).
+5. **Packaging & CI** — Docker Compose one-command stack (`docker-compose.yml`,
+   `docker/`), one-command host launchers (`start_demo.sh`/`stop_demo.sh`), and GitHub
+   Actions CI.
 
-### 5.4 Dashboard (Phase 3 + decision-support)
-`intersection_map.html` (~1,600 lines) extends the existing Leaflet map (Agafonkin,
-n.d.) with: a WebSocket live layer (speed-coloured markers), three Chart.js panels
-(Chart.js contributors, n.d.), pause/resume, a live sim clock, a **compare view** (two
-`scenario_id` runs overlaid + quantified summary), an **impact report** (speed drop,
-congestion rise, stopped mean/peak with directional Δ), a **congestion-alert overlay**,
-and **click-to-inject** (close a road live, then a Close ↔ Reopen toggle to watch
-recovery).
+**Replicating the work.** The repository is self-contained: `git clone`, then
+`docker compose up` builds and runs the whole stack locally (only Docker required), or
+`start_demo.sh` runs it from host processes on a machine with Python + SUMO; the cloud
+side is `terraform apply` in `infra/`. Step-by-step guides are in `DOCKER.md`,
+`running_guide.md`, and `infra/README.md`.
 
-### 5.5 Scenario control & non-IT usability
-`control_server.py` (`:8799`) starts/stops **named presets only** (never arbitrary
-args) from the browser, and auto-starts the metrics writer so the GUI path fills
-InfluxDB without a second terminal. Two one-command launchers wrap the whole local
-stack: `start_demo.sh`/`stop_demo.sh` (host processes) and `docker compose up`
-(containers — see §6).
-
-### 5.6 Cloud infrastructure (Phase 2)
-`infra/` (12 Terraform files; HashiCorp, n.d.) provisions a WebSocket API Gateway,
-three Lambdas (ingest / metrics / replay), a DynamoDB connections table, S3 +
-CloudFront dashboard hosting, Secrets Manager (InfluxDB token), and CloudWatch logs
-with a \$5 billing alarm, in `ap-southeast-2` (Amazon Web Services, n.d.). Verified
-end-to-end (live SUMO → API Gateway → Lambdas → InfluxDB Cloud). An optional,
-cost-gated EC2 sim host can run the producer in AWS.
-
-### 5.7 ETL baseline
-`scripts/etl/` + `scenario_bridge.py` turn Council counts into calibrated
-demand/baseline data, with S3 storage and ingest/query Lambdas — retained as the
-real-data comparison path (45 unit tests, AWS mocked with `moto`).
+**Artefacts produced.** The decision-support digital-twin system itself (the headline
+artefact); ~33 Python modules; a ~1,600-line dashboard; 12 Terraform files + Lambda
+functions; 91 unit tests; Docker/CI configuration; and layered documentation
+(README, ARCHITECTURE, DOCKER, METRICS_REPLAY, running_guide, CHECKLIST, CLAUDE.md).
 
 ---
 
-## 6. Milestone 5 engineering deliverables
+# 4. RESULTS AND OUTCOMES
 
-- **Docker Compose one-command demo.** `docker compose up` builds a SUMO image
-  (`ppa:sumo/stable`, the recipe proven in `sim_host.tf`) and a slim Python image, then
-  runs InfluxDB + sim + writer + replay + dashboard, with code/data bind-mounted
-  (Docker, Inc., n.d.). Guide: [DOCKER.md](../DOCKER.md).
-- **GitHub Actions CI/CD.** `.github/workflows/ci.yml` runs the full unit suite on
-  every push and pull request across a Python 3.11 + 3.12 matrix (test deps pinned in
-  `requirements-dev.txt`, pip-cached). A second workflow publishes the dashboard to
-  GitHub Pages.
+## 4.1. Evidence of Deliverables
 
----
-
-## 7. Evaluation against proposal goals
+**Requirements met.** The table below maps the proposal's objectives to what was
+delivered and the evidence for each.
 
 | Objective | Status | Evidence |
 |---|---|---|
-| P1 — JSON/WebSocket emitter, every step, configurable rate | ✅ Met | `run_traci.py --emit`, `emitter.py`; 6 tests |
-| P2 — API Gateway WebSocket endpoint | ✅ Met | `infra/api_gateway.tf`; verified |
-| P2 — Lambda metrics aggregation | ✅ Met | `traffic-metrics` λ = `compute_tick_metrics`; 6 tests |
-| P2 — InfluxDB Cloud storage | ✅ Met | writes verified (local + cloud) |
-| P2 — Infrastructure as code (Terraform) | ✅ Met | 12 `.tf` files, applied |
-| P2 — GitHub Actions CI/CD | ✅ Met | `ci.yml`, 86 tests, 3.11+3.12 |
-| P3 — WebSocket client + speed-coloured markers | ✅ Met | `intersection_map.html` |
-| P3 — Three Chart.js panels | ✅ Met | count / avg speed / congestion |
-| P3 — Pause/resume | ✅ Met | live control |
-| P3 — Static hosting (S3/CloudFront + Pages) | ✅ Met | `cdn.tf`, `deploy-dashboard.yml` |
-| Ext 1 — Congestion alerts | ✅ Met | congestion overlay (Inc 3) |
-| Ext 2 — Scenario comparison | ✅ Exceeded | compare view + **impact report** (Inc 2/4) |
-| Ext 3 — Historical replay (scrub bar) | ⚠️ Deferred | superseded by the pivot; counts replay is the baseline |
-| Ext 4 — Threshold metrics panel | ✅ Folded | into the congestion overlay |
-| Ext 5 — Docker Compose | ✅ Met | `docker-compose.yml`, `docker/` |
-| Beyond proposal | ➕ Added | incident injection, live click-to-inject + recovery, GUI scenario control, impact report, ETL baseline bridge, one-command launchers |
+| R1 — JSON/WebSocket emitter, every step, configurable rate | Met | `run_traci.py --emit`, `emitter.py`; 6 unit tests; verified live |
+| R2 — API Gateway WebSocket endpoint | Met | `infra/api_gateway.tf`; verified end-to-end |
+| R2 — Lambda metrics aggregation | Met | `traffic-metrics` λ = `compute_tick_metrics`; 6 tests |
+| R2 — InfluxDB Cloud storage | Met | writes verified (local + cloud) |
+| R2 — Infrastructure as code (Terraform) | Met | 12 `.tf` files, applied |
+| R2 — GitHub Actions CI/CD | Met | `ci.yml`, 91 tests, Python 3.11 + 3.12 |
+| R3 — WebSocket client + speed-coloured markers | Met | `intersection_map.html` |
+| R3 — Three Chart.js panels | Met | count / avg speed / congestion |
+| R3 — Pause/resume | Met | live control |
+| R3 — Static hosting (S3/CloudFront + Pages) | Met | `cdn.tf`, `deploy-dashboard.yml` |
+| Ext — Congestion alerts | Met | congestion overlay |
+| Ext — Scenario comparison | Exceeded | compare view + impact report |
+| Ext — Historical replay (scrub bar) | Deferred | superseded by the pivot; counts replay is the baseline |
+| Ext — Threshold metrics panel | Folded | into the congestion overlay |
+| Ext — Docker Compose | Met | `docker-compose.yml`, `docker/` |
+| Beyond proposal | Added | incident injection, live click-to-inject + recovery, GUI scenario control, impact report, ETL baseline bridge, one-command launchers |
 
-**Summary:** every core objective met; the extension set delivered as a stronger
-decision-support feature set, with one proposal item (historical replay scrub bar)
-deliberately deferred by the pivot and several capabilities added beyond the proposal.
+**Scenario results (objective measure of success).** The core test of the twin is whether
+an injected incident produces a measurable, directionally-correct impact against the
+calibrated baseline. Each scenario is run from the morning peak, its per-tick metrics
+stored in InfluxDB tagged by `scenario_id`, and baseline-vs-incident deltas computed by
+the dashboard impact report (and reproduced on the command line by
+`scripts/capture_results.py`).
 
----
-
-## 8. Results — scenario outcomes
-
-The objective measure of the twin's core purpose is whether an injected incident
-produces a measurable, directionally-correct impact against the calibrated baseline.
-Each scenario below was run from the morning peak (sim start 06:30), its per-tick
-metrics written to InfluxDB tagged by `scenario_id`, and the baseline-vs-incident
-deltas computed by the dashboard impact report (and reproduced on the command line by
-`scripts/capture_results.py` — see *Reproducing the results* below).
-
-> **Note — to be populated from a run on the simulation host.** The values below are
-> placeholders («…»); run the three preset scenarios and paste the captured figures.
-> The method, table, and figures are in place so the evidence slots straight in.
+> **Note — to be populated from a run on the simulation host.** Values are placeholders
+> («…»); run the three preset scenarios and paste the captured figures. The method,
+> table and figure slots are in place so the evidence drops straight in.
 
 **Table 1. Baseline vs incident impact (morning peak).**
 
@@ -226,136 +301,124 @@ deltas computed by the dashboard impact report (and reproduced on the command li
 | Crash — arterial closed (`crash_arterial`) | «…» | «−…%» | «…» | «+…» | «…» / «…» | «…» |
 | Roadworks — reduced speed (`roadworks`) | «…» | «−…%» | «…» | «+…» | «…» / «…» | «…» |
 
-*Interpretation (to confirm against the figures): a larger speed drop and congestion
-rise indicate a more disruptive incident; the arterial closure is expected to be the
-most severe, with recovery visible after the road is reopened.*
+**Figures (screenshots to capture from the running dashboard; place in Appendix A if
+large):**
 
-**Figures (to capture from the running dashboard):**
-
-- *Figure 2. Live dashboard — speed-coloured vehicles on the CBD map with the three
-  live metric panels.*
-- *Figure 3. Compare view — baseline vs incident overlaid for a chosen metric, with the
+- *Figure 2. Live dashboard — speed-coloured vehicles on the CBD map with the three live
+  metric panels.*
+- *Figure 3. Compare view — baseline vs incident overlaid for a metric, with the
   quantified summary line.*
-- *Figure 4. Impact report — the baseline-vs-incident table with directional deltas.*
-- *Figure 5. Congestion-alert overlay — slow segments flagged red on the road network.*
+- *Figure 4. Impact report — baseline-vs-incident table with directional deltas.*
+- *Figure 5. Congestion-alert overlay — slow segments flagged red on the network.*
 
-**Reproducing the results.** With the stack running (`docker compose up`, or
-`start_demo.sh`), start each preset from the dashboard, let it run, then:
+**How to produce the evidence.** With the stack running (`docker compose up`, or
+`start_demo.sh`), start each preset from the dashboard, then run:
 
-```bash
+```
 python scripts/capture_results.py --replay http://localhost:8788/metrics \
   --scenarios baseline_am,crash_arterial,roadworks
 ```
 
-This prints Table 1 as Markdown (means, peaks, and deltas vs the baseline), ready to
-paste. Screenshots for Figures 2–5 are taken from the dashboard panels.
+This prints Table 1 as Markdown (means, peaks, deltas vs baseline), ready to paste.
 
----
+## 4.2. Testing / Validation
 
-## 9. Testing & quality
+Testing used a **pure-core / thin-glue** strategy so logic is verified without external
+systems:
 
-- **86 unit tests**, all green on Python 3.11 and 3.12:
-  - 41 core (`scripts/tests/`): incidents (14), control_server (11), emitter (6),
-    metrics (6), replay_server (4).
+- **91 unit tests**, all passing, run in CI on Python 3.11 and 3.12:
+  - 46 core (`scripts/tests/`): incidents (14), control_server (11), emitter (6),
+    metrics (6), capture_results (5), replay_server (4).
   - 45 ETL (`scripts/etl/tests/`): scenario bridge (9), counts ETL (7), ingest (7),
     query (6), drive client (6), lambda query (4), lambda ingest (3), s3 store (3).
-- **Pure-core / thin-glue** design: business logic is tested against fakes (`traci`,
-  `Popen`) and mocks (`moto` for AWS) — no SUMO, cloud, or network needed in CI.
-- Dashboard JavaScript is syntax-checked with `node --check`.
-- CI enforces the suite on every push and pull request.
+- **Fakes and mocks:** a fake `traci`/`Popen` and `moto` (mock AWS) mean no SUMO, cloud,
+  or network is needed to test.
+- **Front-end:** the dashboard JavaScript is syntax-checked with `node --check`.
+- **Continuous integration:** `.github/workflows/ci.yml` runs the full suite on every push
+  and pull request; a second workflow publishes the dashboard to GitHub Pages.
+- **End-to-end verification:** the live path (SUMO → emitter → writer → InfluxDB →
+  dashboard) and the cloud path (→ API Gateway → Lambdas → InfluxDB Cloud) were each
+  exercised and confirmed during development.
+
+*(Evidence: CI run screenshots and a `pytest` summary can be added to Appendix A.)*
 
 ---
 
-## 10. Engineering practices
+# 5. REFLECTIONS
 
-Infrastructure-as-code (Terraform) with least-privilege IAM and no hard-coded secrets
-(Secrets Manager); one logical change per commit with a consistent attribution footer;
-feature-branch workflow; cost controls (billing alarm, cost-gated sim host); layered
-documentation (`README`, `ARCHITECTURE`, `DOCKER`, `METRICS_REPLAY`, `running_guide`,
-`infra/README`, `CHECKLIST`, `CLAUDE.md`).
+## 5.1. Reflections
 
----
+**Did I achieve what I set out to achieve?** Yes — the core objectives (real-time
+emitter, cloud pipeline, live dashboard) were all met, the committed Milestone-5
+engineering deliverables (Docker Compose + CI) were completed, and the extension work was
+delivered as a stronger decision-support feature set.
 
-## 11. Known limitations & honest caveats
+**Did it go as expected?** Mostly, with one deliberate change: part-way through I judged
+that replaying historical counts was hard to defend as "real", and re-aimed the extension
+work at *what-if decision support* on the calibrated model, keeping the real-data
+pipeline as a baseline. Making and defending that scope decision on engineering and
+academic merit — not sunk cost — was the single most valuable lesson of the project.
 
-- **Incidents are synthetic.** The twin perturbs a calibrated model; it does not
-  ingest live road-sensor data (the Council sources are download-only).
-- **A "closed" edge is a hard speed cap, not rerouting.** Traffic queues/crawls rather
-  than diverting; incident rerouting is scoped and deferred (§13).
-- **Cloud click-to-inject is local-only.** Live injection works over the local
-  WebSocket; driving it from the hosted dashboard needs a cloud control path (deferred).
-- **Replay public URL.** A Lambda Function URL 403s anonymously on this account; the
-  dashboard uses an API-Gateway-fronted replay instead.
-- **Docker `sim` image** is validated with `docker compose config` and uses the proven
-  SUMO recipe, but a full container build/run should be exercised on the target VM.
-- **Compare uses per-series aggregates**, not timestamp alignment (the two runs occur
-  at different wall-clock times) — appropriate for the metrics compared.
+**New learning.** I had to learn real-time control of SUMO through TraCI and asynchronous
+streaming in Python; serverless AWS architecture and infrastructure-as-code with
+Terraform (least-privilege IAM, secrets handling, cost controls); time-series modelling
+in InfluxDB; containerisation with Docker Compose; and CI with GitHub Actions — most of
+which were new to me at the start.
 
----
+**Personal and technical growth.** Technically I moved from writing scripts to designing
+a multi-component, cloud-connected system with a test strategy and reproducible
+deployment. Personally I grew in planning and judgement — scoping increments, tracking a
+budget, documenting honestly (including limitations), and communicating decisions.
 
-## 12. Reflection & skills developed
+## 5.2. Use of Generative AI
 
-**New skills developed.** The project took me well beyond my starting point. On the
-simulation side I learned to drive SUMO in real time through TraCI and to stream
-coordinate-converted state asynchronously with Python `asyncio`/`websockets`. On the
-cloud side I built, from scratch, a serverless pipeline (API Gateway WebSocket API,
-Lambda, DynamoDB, S3/CloudFront, Secrets Manager) and provisioned all of it as code
-with Terraform — infrastructure-as-code, least-privilege IAM, and cost controls were
-new to me. I also learned time-series modelling in InfluxDB (tags vs fields, Flux
-range queries), containerised the whole stack with Docker Compose, and set up CI with
-GitHub Actions.
+Generative AI (Claude Code, Anthropic) was used substantially across the technical work:
+drafting and refactoring code, generating unit tests, scaffolding Terraform and Docker
+configuration, producing diagrams and documentation, and drafting this report from
+project artefacts. I directed the work (goals, architecture and design decisions),
+reviewed and validated all generated code and prose, and ran and verified the tests and
+the running system.
 
-**What I found most valuable.** The strongest lesson was non-technical: recognising
-mid-project that replaying historical counts was hard to defend as "real", and
-re-aiming the work at *what-if decision support* on the calibrated model. Framing the
-synthetic incidents honestly — and keeping the real-data pipeline as a baseline rather
-than discarding it — taught me to make and defend a scope decision on engineering and
-academic merit, not sunk cost.
+**Where it helped:** it accelerated boilerplate (IaC, test fixtures, glue code),
+surfaced options quickly, and kept documentation in step with the code.
 
-**What was hard.** Getting SUMO running from source, debugging a Lambda Function URL
-that returned 403 to anonymous requests, keeping the local and cloud metric paths
-identical (solved by reusing one pure function), and the networking details of running
-services inside a VM (binding `0.0.0.0` for port-forwarding, Docker socket
-permissions). Each of these pushed my debugging and systems knowledge.
+**Issues it caused / that I had to manage:** generated code and text required careful
+review — it could be confidently wrong, make assumptions about the environment, or need
+correcting for this project's specifics (e.g. SUMO/AWS quirks). I treated its output as a
+draft to verify, not a finished answer, and relied on the test suite and end-to-end runs
+as the source of truth.
 
-**What I would do differently.** Capture quantified scenario results earlier rather
-than at the end, and stand up the hosted deployment continuously instead of in a final
-push — both would have given evidence to iterate against sooner.
+*(Please confirm this reflects your actual usage and edit to your voice before
+submission.)*
 
-**Areas for continued development.** Incident rerouting for realistic diversion,
-a cloud control path so the hosted dashboard is fully interactive, load/performance
-testing of the pipeline, and front-end polish. These are the natural next steps (§13).
+## 5.3. Conclusions
 
----
+**Strengths.** A working, tested, reproducibly deployable decision-support twin: it runs
+in real time, lets a non-technical user inject incidents and read a quantified impact,
+and can be stood up with one command locally or deployed to AWS as code. The honest
+framing (synthetic incidents on a calibrated baseline) is defensible, and quality
+engineering (91 tests, CI, IaC, layered docs) supports it.
 
-## 13. Future work
+**Limitations.** Incidents are synthetic (no live sensor feed); a "closed" edge caps
+speed rather than rerouting traffic, so vehicles queue rather than divert; live
+click-to-inject works only over the local WebSocket (not yet over the hosted cloud
+dashboard); and the Docker simulation image has been configuration-validated but not yet
+built and run on the deployment VM.
 
-- Incident **rerouting / detours** (TraCI `adaptTraveltime` + `rerouteTraveltime`,
-  `--time-to-teleport -1`), ~6–9 h.
-- **Cloud control path** for click-to-inject (API Gateway control route + SSM).
-- Impact report **v2**: true per-vehicle delay (`traci.vehicle.getTimeLoss`) and
-  affected-area; recovery-time after reopen.
-- Portfolio wrap-up: dashboard screenshots + live-demo URL in the README, and a
-  2-minute demo recording.
+**Suggestions for the future.** Incident rerouting/detours; a cloud control path so the
+hosted dashboard is fully interactive; an enhanced impact report (true per-vehicle delay
+via `getTimeLoss`, affected-area, recovery-time); and load/performance testing.
+
+**What I would do differently.** Capture quantified scenario results earlier (rather than
+at the end), and stand up the hosted deployment continuously instead of in a final push —
+both would have provided evidence to iterate against sooner.
 
 ---
 
-## 14. Conclusion
+# 6. REFERENCES
 
-The project delivers a working, cloud-connected, tested, and reproducibly deployable
-decision-support digital twin of Christchurch's central-city traffic. It meets the
-proposal's core objectives and re-aims the extension work at genuine what-if decision
-support — the substance of a digital twin — while retaining the real-data pipeline as a
-calibrated baseline. The engineering deliverables (one-command demos, CI across two
-Python versions, infrastructure-as-code, and layered documentation) make it both
-demonstrable and defensible as an industry-project portfolio piece.
-
----
-
-## 15. References
-
-*Referencing follows APA 7th edition, per Lincoln University Library and Teaching &
-Learning guidance.*
+*Referencing follows APA 7th edition (Lincoln University Learning, Teaching & Library
+guidance: https://ltl.lincoln.ac.nz/learning-and-research-skills/writing-and-referencing/referencing/).*
 
 Agafonkin, V. (n.d.). *Leaflet: An open-source JavaScript library for mobile-friendly
 interactive maps*. Retrieved October 12, 2026, from https://leafletjs.com/
@@ -363,8 +426,8 @@ interactive maps*. Retrieved October 12, 2026, from https://leafletjs.com/
 Amazon Web Services. (n.d.). *AWS documentation*. Retrieved October 12, 2026, from
 https://docs.aws.amazon.com/
 
-Chart.js contributors. (n.d.). *Chart.js documentation*. Retrieved October 12, 2026,
-from https://www.chartjs.org/docs/latest/
+Chart.js contributors. (n.d.). *Chart.js documentation*. Retrieved October 12, 2026, from
+https://www.chartjs.org/docs/latest/
 
 Christchurch City Council. (n.d.). *Intersection traffic counts database*. Retrieved
 October 12, 2026, from https://ccc.govt.nz/transport/improving-our-transport-and-roads/traffic-count-data/intersection-traffic-counts-database
@@ -372,8 +435,8 @@ October 12, 2026, from https://ccc.govt.nz/transport/improving-our-transport-and
 Docker, Inc. (n.d.). *Docker documentation*. Retrieved October 12, 2026, from
 https://docs.docker.com/
 
-German Aerospace Center (DLR). (n.d.). *SUMO documentation*. Retrieved October 12,
-2026, from https://sumo.dlr.de/docs/
+German Aerospace Center (DLR). (n.d.). *SUMO documentation*. Retrieved October 12, 2026,
+from https://sumo.dlr.de/docs/
 
 HashiCorp. (n.d.). *Terraform documentation*. Retrieved October 12, 2026, from
 https://developer.hashicorp.com/terraform/docs
@@ -381,15 +444,24 @@ https://developer.hashicorp.com/terraform/docs
 InfluxData. (n.d.). *InfluxDB OSS documentation*. Retrieved October 12, 2026, from
 https://docs.influxdata.com/influxdb/v2/
 
-Lopez, P. A., Behrisch, M., Bieker-Walz, L., Erdmann, J., Flötteröd, Y.-P., Hilbrich,
-R., Lücken, L., Rummel, J., Wagner, P., & Wießner, E. (2018). Microscopic traffic
-simulation using SUMO. In *2018 21st International Conference on Intelligent
-Transportation Systems (ITSC)* (pp. 2575–2582). IEEE.
-https://doi.org/10.1109/ITSC.2018.8569938
+Lopez, P. A., Behrisch, M., Bieker-Walz, L., Erdmann, J., Flötteröd, Y.-P., Hilbrich, R.,
+Lücken, L., Rummel, J., Wagner, P., & Wießner, E. (2018). Microscopic traffic simulation
+using SUMO. In *2018 21st International Conference on Intelligent Transportation Systems
+(ITSC)* (pp. 2575–2582). IEEE. https://doi.org/10.1109/ITSC.2018.8569938
 
 OpenStreetMap contributors. (n.d.). *OpenStreetMap*. Retrieved October 12, 2026, from
 https://www.openstreetmap.org/
 
 ---
 
-*Status detail: [CHECKLIST.md](../CHECKLIST.md) · Architecture: [ARCHITECTURE.md](ARCHITECTURE.md) · Decisions & history: [CLAUDE.md](../CLAUDE.md)*
+# 7. APPENDICES
+
+## Appendix A — Independent Software Project
+
+**GitHub Repository:** https://github.com/kyawzinmyolwin/demo_smart_city_digital_twin
+
+**URL for the Deployed App:** [to complete — hosted CloudFront dashboard URL once the
+hosted deploy is finished; see §5.3 limitations]
+
+*Supplementary evidence to attach here (optional): dashboard screenshots (Figures 2–5),
+a CI run summary, and the `scripts/capture_results.py` output for Table 1.*
