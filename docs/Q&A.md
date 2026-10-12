@@ -124,3 +124,39 @@ With `?control=http://localhost:8799` (no token), the same button hits
 auto-starts `metrics_writer.py`) instead of going through API Gateway → SSM → EC2. The
 HTTP contract (`/scenarios`, `/start`, `/stop`, `/status`, `/start_roadblock`) is
 identical, which is why one dashboard panel drives both.
+
+---
+
+## Q2. We only have Baseline and Crash preset buttons. If the product owner / examiner asks for more scenario comparisons, how do we fulfil that?
+
+**Key point:** the **Compare view compares any two `scenario_id`s that have data in
+InfluxDB** — the preset buttons are just shortcuts for producing tagged runs. So "more
+comparisons" means "more tagged runs". There are several ways, increasing in effort:
+
+1. **Click-a-road closure (no code change, examiner-driven).** Click any road on the
+   map → **Start road block** → a run that closes that edge. The examiner chooses the
+   scenario live. *(Caveat: by default every road block is tagged `scenario_id =
+   "roadblock"`, so two different closures aren't independently comparable — see the
+   enhancement below.)*
+2. **Compare any two existing runs (no change).** Every run is tagged and stored; enter
+   any two `scenario_id`s in the Compare panel (e.g. `baseline_am` vs `roadworks`, the
+   3rd preset). You are not limited to two scenarios.
+3. **Add named preset buttons (small change + redeploy).** Add entries to the `PRESETS`
+   registry — kept in **two** places: `scripts/control_server.py` (local — just restart)
+   and `infra/functions/traffic_control/handler.py` (cloud — `terraform apply`
+   repackages the Lambda). Each preset is a `scenario_id` + args: a different
+   `--close-edge=<edge>@<window>` or an `--incident-file` (reduced-speed corridor or
+   demand surge via `incidents.py`).
+4. **Local CLI (maximum flexibility).** `run_traci.py --scenario-id <any> --close-edge …
+   / --incident-file …` tags a run with any id, which then appears in Compare. The
+   **cloud is deliberately preset-only** (no arbitrary args over the network) for safety.
+
+**Recommended enhancement.** Tag each click-a-road closure with a **unique id per edge**
+(`rb_<edge>`) so every road on the map becomes its own comparable scenario — giving the
+examiner unlimited, live-chosen comparisons with no per-scenario code change. Plus a few
+more preset buttons for variety (longer full-morning closure, reduced-speed corridor,
+demand surge).
+
+**Safety framing (for the viva):** arbitrary scenario definitions are never accepted over
+the cloud control API — only a fixed preset allowlist plus a regex-validated edge id.
+That is why the cloud path is preset-only while the local CLI is unrestricted.
