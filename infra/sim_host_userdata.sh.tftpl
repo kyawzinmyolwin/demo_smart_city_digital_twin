@@ -29,8 +29,11 @@ cat > /etc/sumo-emitter.env <<'ENVF'
 SCENARIO_ARGS=--real-time --speed 5 --jump-to 23400 --end 27000 --scenario-id baseline_am
 ENVF
 
-# Run the emitter as a service, forwarding to the cloud API Gateway
-cat > /etc/systemd/system/sumo-emitter.service <<UNIT
+# Run the emitter as a service, forwarding to the cloud API Gateway.
+# Quoted heredoc ('UNIT') so bash does NOT expand $SCENARIO_ARGS (a systemd var,
+# expanded at service runtime). ${ws_url} is substituted earlier by Terraform
+# templatefile, not bash, so quoting the heredoc does not affect it.
+cat > /etc/systemd/system/sumo-emitter.service <<'UNIT'
 [Unit]
 Description=SUMO producer -> API Gateway
 After=network-online.target
