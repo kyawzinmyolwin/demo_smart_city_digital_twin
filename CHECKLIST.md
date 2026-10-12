@@ -47,6 +47,14 @@ _Updated 2026-10-03._
 - [ ] CV / LinkedIn write-up
 
 ### Planned improvements (to add later)
+- [ ] **Cloud live-inject ("Close live" over the cloud).** Today "Close live" /
+      "Reopen road" (inject into the *running* sim) is local-only — the cloud emitter runs
+      forward-only (`--emit-target`, no local WS/`ControlInbox`) and the cloud feed is
+      one-way fan-out, so there's no back-channel to the running sim. To support it: add a
+      control route on the WebSocket API (or drive injection through the HTTP control API)
+      **and** have the producer hold/read an inbound connection that applies
+      `incident_from_control` each tick on the sim host. Larger build; the cloud workaround
+      today is **Start road block** (fresh run with the edge closed). See `docs/Q&A.md` Q3.
 - [ ] **More scenario comparisons — unique per-edge road-block id + extra presets.**
       (1) Tag each click-a-road closure with a **unique `scenario_id` per edge** (e.g.
       `rb_<sanitised-edge>`, stripping chars not in the scenario filter `[A-Za-z0-9_.:-]`)

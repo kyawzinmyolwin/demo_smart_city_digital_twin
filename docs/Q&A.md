@@ -160,3 +160,41 @@ demand surge).
 **Safety framing (for the viva):** arbitrary scenario definitions are never accepted over
 the cloud control API — only a fixed preset allowlist plus a regex-validated edge id.
 That is why the cloud path is preset-only while the local CLI is unrestricted.
+
+---
+
+## Q3. Why doesn't "Close live" work in the cloud demo?
+
+**It is expected, not a bug — "Close live" is local-only by design.**
+
+"Close live" (and its "Reopen road (resume)" toggle) injects a closure into the
+**already-running** simulation by sending a control frame **up the live WebSocket** to
+the emitter's inbound `ControlInbox` (the Inc 3 click-to-inject mechanism). That requires
+a two-way channel between the browser and `run_traci.py`.
+
+In the cloud that back-channel does not exist, for two reasons:
+
+1. **No inbound server on the sim host.** The cloud sim host runs the emitter in
+   forward-only mode — `run_traci.py ... --emit-target wss://…` with **no `--emit` /
+   `--emit-host`** — so there is **no local WebSocket server and no `ControlInbox`**
+   listening for control frames.
+2. **The cloud live feed is one-way fan-out.** The emitter *dials out* and posts
+   snapshots to the WebSocket API Gateway → `traffic-ingest` Lambda → fanned out to
+   browsers. The browser is a **consumer** of that feed; there is no route for it to send
+   a control frame back to that specific emitter.
+
+So in the cloud there is nothing on the other end to receive "Close live".
+
+**What to use in the cloud instead:** **Scenario control → "Start road block"** (click a
+road → Start road block). That goes through the authenticated cloud control API and starts
+a **fresh run with the edge closed from the start** — which does work in the cloud, and
+still demonstrates incident impact via Compare / Impact report.
+
+| Action | Local | Cloud |
+|---|---|---|
+| **Close live** — inject into the *running* sim; watch recovery on reopen | yes | no (by design) |
+| **Start road block** — fresh run with the edge closed | yes | yes |
+
+Documented in `CLAUDE.md` and the report's §11 limitations ("Cloud click-to-inject is
+local-only"). A true cloud live-inject is a deferred larger build (see CHECKLIST planned
+improvements).
