@@ -134,22 +134,18 @@ decision-support features**, all deployable via a single Docker Compose command.
 
 **Sub-goals (the five project milestones):**
 
-| # | Sub-goal (milestone) | Deadline |
+| # | Sub-Goal | Measure of Success |
 |---|---|---|
-| M1 | Stream vehicle-state data out of the simulation every step, without modifying the existing simulation core | 16 Aug 2026 |
-| M2 | Provision cloud infrastructure (AWS, InfluxDB Cloud) to receive and persist the streamed data as time-series records | 6 Sep 2026 |
-| M3 | Extend the browser dashboard with a streaming vehicle layer, replacing its one-time static load | 20 Sep 2026 |
-| M4 | Implement at least four decision-support features (congestion alerts, scenario comparison, historical replay, threshold metrics panel) | 5 Oct 2026 |
-| M5 | Package the system with Docker Compose and automate testing/deployment with GitHub Actions | 19 Oct 2026 |
+| M1 | Stream vehicle-state data out of the simulation every step, without modifying the existing simulation core | Vehicle-state JSON is emitted every simulation step and received by a client at sub-second latency; the serialiser is unit-tested |
+| M2 | Provision cloud infrastructure (AWS, InfluxDB Cloud) to receive and persist the streamed data as time-series records | Streamed ticks reach InfluxDB Cloud via API Gateway + Lambda and are queryable; the full AWS stack is defined in Terraform and reprovisions from a clean account |
+| M3 | Extend the browser dashboard with a streaming vehicle layer, replacing its one-time static load | The dashboard shows moving vehicles sourced from the live feed (not the static CSV), with live metric charts updating in real time |
+| M4 | Implement at least four decision-support features (congestion alerts, scenario comparison, historical replay, threshold metrics panel) | At least four decision-support features are demonstrated working live, against stored/streamed data, and signed off by the supervisor |
+| M5 | Package the system with Docker Compose and automate testing/deployment with GitHub Actions | The whole stack starts with a single `docker compose up` command; the CI pipeline runs the test suite automatically on every push |
 
-**Success metrics (from the proposal):**
-
-- End-to-end pipeline latency measured and reported (target: sub-second from simulation
-  step to dashboard update).
-- All five sub-goals demonstrated working in a single recorded run.
-- Terraform able to reprovision the full AWS stack from a clean account.
-- Supervisor sign-off on a live demonstration of each decision-support feature.
-- Final report submitted evaluating the system against these goals.
+**Overall success criteria.** As a proof of concept, the project is judged successful when
+all five sub-goals above are demonstrated working together in a single recorded run, the
+supervisor signs off on that live demonstration, and this report evaluates the delivered
+system against these goals.
 
 **Evolution during delivery.** Milestone 4 was committed as "at least four
 decision-support features." During delivery the *specific set* evolved from the
