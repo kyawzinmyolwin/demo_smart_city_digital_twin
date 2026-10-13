@@ -29,15 +29,17 @@ scenarios on a realistic model.
 calibrated SUMO simulation in real time, lets a user inject incidents from the browser,
 and measures their impact against a real-data baseline, backed by a cloud data pipeline.
 
-**Methods:** Extended an existing SUMO model with a WebSocket emitter; built an AWS
+**Methods:** The system was built as a **proof of concept** to demonstrate feasibility
+end-to-end. It extends an existing SUMO model with a WebSocket emitter; builds an AWS
 serverless pipeline (API Gateway, Lambda, InfluxDB Cloud) as Terraform infrastructure-
-as-code; extended a Leaflet/Chart.js dashboard with incident injection, scenario
-comparison and impact reporting; packaged it with Docker Compose and GitHub Actions CI.
+as-code; extends a Leaflet/Chart.js dashboard with incident injection, scenario comparison
+and impact reporting; and packages it with Docker Compose and GitHub Actions CI, developed
+through iterative milestone increments.
 
 **Outcome:** A working, tested (91 unit tests, CI on two Python versions), reproducibly
-deployable twin. Strengths: real-time operation and an honest baseline-vs-incident
-comparison runnable with one command. Limitations: incidents are synthetic, and a
-closure caps speed rather than rerouting traffic.
+deployable **proof-of-concept** twin. Strengths: real-time operation and an honest
+baseline-vs-incident comparison runnable with one command. Limitations (consistent with a
+PoC): incidents are synthetic, and a closure caps speed rather than rerouting traffic.
 
 ---
 
@@ -59,6 +61,7 @@ for the final content. See §5.2 for detail.
 | Term / acronym | Meaning |
 |---|---|
 | **Digital twin** | A live, data-driven virtual model of a real system used to monitor and test "what-if" scenarios. |
+| **Proof of concept (PoC)** | A limited but working implementation built to demonstrate that an idea is feasible, rather than a production-ready product. |
 | **SUMO** | Simulation of Urban MObility — an open-source microscopic traffic simulator. |
 | **TraCI** | Traffic Control Interface — SUMO's API for controlling a running simulation step-by-step. |
 | **CBD** | Central Business District (here, central Christchurch). |
@@ -195,7 +198,23 @@ comparable system offers.
 
 ## 3.1. Overview
 
-**Project management.** The project used **Scrum adapted for a single developer**. The
+**Methodology — proof of concept.** The project was developed as a **proof of concept
+(PoC)**: its purpose is to demonstrate, end-to-end, the *feasibility* of a cloud-connected
+decision-support traffic digital twin — not to deliver a production-hardened system. A PoC
+approach was appropriate because the contribution is a **novel combination** of pieces that
+exist only separately (a calibrated real-city SUMO simulation, a serverless cloud pipeline,
+and a decision-support dashboard — see §2.2), so the first question to answer is "can these
+be made to work together, reliably, at the required latency, within a student budget?".
+The PoC is therefore deliberately **scoped**: incidents are synthetic (what-if
+perturbations, not live sensor data), the cloud runs on free-tier / on-demand resources,
+and some paths are demo-grade rather than fully productionised (see §5.3 Limitations). It
+is nonetheless a **working, deployed and tested** implementation, so it proves the concept
+rather than merely describing it. Success is judged by the proof-of-concept criteria in
+§2.1 (the pipeline works end-to-end, an injected incident produces a measurable impact, and
+the stack is reproducibly deployable).
+
+**Development process.** Within that PoC, the build used **Scrum adapted for a single
+developer**. The
 five milestones (§2.1) doubled as sprints: each began by planning that milestone's tasks
 into a backlog, ran through self-review against that backlog, and ended with a sprint
 review demonstrating the working increment to the supervisor (acting as product owner),
@@ -452,11 +471,12 @@ submission.)*
 
 ## 5.3. Conclusions
 
-**Strengths.** A working, tested, reproducibly deployable decision-support twin: it runs
-in real time, lets a non-technical user inject incidents and read a quantified impact,
-and can be stood up with one command locally or deployed to AWS as code. The honest
-framing (synthetic incidents on a calibrated baseline) is defensible, and quality
-engineering (91 tests, CI, IaC, layered docs) supports it.
+**Strengths.** As a proof of concept, the project succeeds: it is a working, tested,
+reproducibly deployable decision-support twin that runs in real time, lets a non-technical
+user inject incidents and read a quantified impact, and can be stood up with one command
+locally or deployed to AWS as code — demonstrating that the novel combination at its core
+is feasible. The honest framing (synthetic incidents on a calibrated baseline) is
+defensible, and quality engineering (91 tests, CI, IaC, layered docs) supports it.
 
 **Limitations.** Incidents are synthetic (no live sensor feed); a "closed" edge caps
 speed rather than rerouting traffic, so vehicles queue rather than divert; live
