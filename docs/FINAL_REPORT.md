@@ -213,15 +213,17 @@ rather than merely describing it. Success is judged by the proof-of-concept crit
 §2.1 (the pipeline works end-to-end, an injected incident produces a measurable impact, and
 the stack is reproducibly deployable).
 
-**Development process.** Within that PoC, the build used **Scrum adapted for a single
-developer**. The
-five milestones (§2.1) doubled as sprints: each began by planning that milestone's tasks
-into a backlog, ran through self-review against that backlog, and ended with a sprint
-review demonstrating the working increment to the supervisor (acting as product owner),
-followed by a short retrospective. One person covered all Scrum roles, but the
-plan–build–review–retrospective cycle was kept for every milestone, which suited a project
-where each milestone delivers a demonstrable increment that benefits from feedback before
-the next layer is built on it.
+**Development process.** Within that PoC, the build followed a **lightweight, iterative
+approach inspired by Scrum / agile**, rather than formal Scrum with a dedicated
+project-management tool. The five milestones (§2.1) acted as iterations: each began by
+breaking the milestone into tasks, proceeded through build-and-test, and ended by
+demonstrating the working increment to the supervisor at a milestone review and adjusting
+the plan for the next iteration. As a solo developer there were no formal Scrum ceremonies
+or roles and **no issue-tracker such as Jira**; instead the task list, design decisions and
+a running hour budget were tracked in the repository itself (`CLAUDE.md`, `CHECKLIST.md`)
+and in weekly journals. This plan–build–review–adjust cycle suited a project where each
+milestone delivers a demonstrable increment that benefits from feedback before the next
+layer is built on it.
 
 **Techniques and methods.**
 
