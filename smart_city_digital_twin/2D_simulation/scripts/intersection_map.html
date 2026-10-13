@@ -1100,6 +1100,13 @@
     return (await resp.json()).points || [];
   }
 
+  // simTime series for a scenario — non-fatal (returns [] if the replay endpoint
+  // doesn't yet serve simTime, so Compare falls back to wall-clock labels).
+  async function fetchSimSeries(range, every, scenario) {
+    try { return await fetchScenarioSeries("simTime", range, every, scenario); }
+    catch (e) { return []; }
+  }
+
   async function loadCompare() {
     const statusEl = document.getElementById("cmp-status");
     if (typeof Chart === "undefined") { statusEl.textContent = "Chart.js not loaded"; return; }
@@ -1111,11 +1118,13 @@
     const every = HIST_EVERY[range] || "";
     statusEl.textContent = "loading…";
     try {
-      const [ptsA, ptsB] = await Promise.all([
+      const [ptsA, simA, ptsB, simB] = await Promise.all([
         fetchScenarioSeries(field, range, every, a),
+        fetchSimSeries(range, every, a),
         fetchScenarioSeries(field, range, every, b),
+        fetchSimSeries(range, every, b),
       ]);
-      renderCompare(field, range, a, ptsA, b, ptsB);
+      renderCompare(field, range, a, ptsA, simA, b, ptsB, simB);
       statusEl.textContent = a + ": " + ptsA.length + " pts · " + b + ": " + ptsB.length + " pts";
       renderCompareSummary(field, a, ptsA, b, ptsB);
     } catch (err) {
@@ -1155,13 +1164,60 @@
       "  · mean over the selected range";
   }
 
-  function renderCompare(field, range, nameA, ptsA, nameB, ptsB) {
+  // Join a field series with its simTime series (same write timestamps) so each
+  // point becomes {x: simTime, y: value} — lets both runs overlay on the SIM clock
+  // (06:30→07:30) instead of their different wall-clock write times.
+  function _toSimXY(pts, simPts, toKmh) {
+    const byTime = {};
+    (simPts || []).forEach(function (p) { byTime[p.time] = p.value; });
+    return pts.map(function (p) {
+      return { x: byTime[p.time], y: toKmh ? Number((p.value * 3.6).toFixed(1)) : p.value };
+    }).filter(function (d) { return d.x != null && isFinite(d.x); })
+      .sort(function (a, b) { return a.x - b.x; });
+  }
+
+  function renderCompare(field, range, nameA, ptsA, simA, nameB, ptsB, simB) {
     const toKmh = field === "avgSpeed";
+    const yTitle = toKmh ? "avgSpeed (km/h)" : field;
+    const dataA = _toSimXY(ptsA, simA, toKmh);
+    const dataB = _toSimXY(ptsB, simB, toKmh);
+    const haveSim = dataA.length || dataB.length;    // simTime available on at least one
+    if (cmpChart) cmpChart.destroy();
+
+    if (haveSim) {
+      // x = simulation time; both runs overlay on the same simulated timeline.
+      cmpChart = new Chart(document.getElementById("chart-cmp").getContext("2d"), {
+        type: "line",
+        data: {
+          datasets: [
+            { label: nameA, data: dataA, borderColor: "#0e7c72",
+              borderWidth: 1.5, pointRadius: 0, tension: 0.25, fill: false },
+            { label: nameB, data: dataB, borderColor: "#dc2626",
+              borderWidth: 1.5, pointRadius: 0, tension: 0.25, fill: false },
+          ],
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false, animation: false,
+          plugins: {
+            legend: { display: true, labels: { font: { size: 10 } } },
+            title: { display: true, text: yTitle + " · sim time", font: { size: 11 } },
+          },
+          scales: {
+            x: { type: "linear",
+                 title: { display: true, text: "sim time", font: { size: 9 } },
+                 ticks: { maxTicksLimit: 5, font: { size: 9 },
+                          callback: function (v) { return fmtClock(v).slice(0, 5); } } },
+            y: { beginAtZero: true, ticks: { maxTicksLimit: 4, font: { size: 9 } } },
+          },
+        },
+      });
+      return;
+    }
+
+    // Fallback (no simTime from the replay endpoint): wall-clock labels, by index.
     const val = function (p) { return toKmh ? Number((p.value * 3.6).toFixed(1)) : p.value; };
-    // Align on A's timestamps for labels; each dataset plots its own values.
     const labels = (ptsA.length >= ptsB.length ? ptsA : ptsB)
       .map(function (p) { return new Date(p.time).toLocaleTimeString(); });
-    if (cmpChart) cmpChart.destroy();
     cmpChart = new Chart(document.getElementById("chart-cmp").getContext("2d"), {
       type: "line",
       data: {
@@ -1177,8 +1233,7 @@
         responsive: true, maintainAspectRatio: false, animation: false,
         plugins: {
           legend: { display: true, labels: { font: { size: 10 } } },
-          title: { display: true, text: (toKmh ? "avgSpeed (km/h)" : field) + " · " + range,
-                   font: { size: 11 } },
+          title: { display: true, text: yTitle + " · " + range, font: { size: 11 } },
         },
         scales: {
           x: { ticks: { maxTicksLimit: 4, font: { size: 9 } } },

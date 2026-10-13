@@ -37,7 +37,7 @@ DEFAULT_BUCKET = "traffic-metrics"
 DEFAULT_PORT = 8788
 
 # Same allowlist + validation as the Lambda — user input never reaches Flux raw.
-ALLOWED_FIELDS = {"avgSpeed", "congestionIndex", "vehicleCount", "stoppedCount", "movingCount"}
+ALLOWED_FIELDS = {"avgSpeed", "congestionIndex", "vehicleCount", "stoppedCount", "movingCount", "simTime"}
 _RANGE_RE = re.compile(r"^(-?\d+[smhdwy]|now\(\)|now|\d{4}-\d{2}-\d{2}T[\d:.]+Z)$")
 _EVERY_RE = re.compile(r"^\d+[smhdw]$")
 _SCENARIO_RE = re.compile(r"^[A-Za-z0-9_.:-]{1,64}$")  # guards the Flux scenario_id filter

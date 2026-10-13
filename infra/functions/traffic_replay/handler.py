@@ -29,7 +29,7 @@ INFLUXDB_BUCKET = os.environ["INFLUXDB_BUCKET"]
 INFLUXDB_SECRET_ARN = os.environ["INFLUXDB_SECRET_ARN"]
 
 # Allowlist so user input never reaches Flux unchecked.
-ALLOWED_FIELDS = {"avgSpeed", "congestionIndex", "vehicleCount", "stoppedCount", "movingCount"}
+ALLOWED_FIELDS = {"avgSpeed", "congestionIndex", "vehicleCount", "stoppedCount", "movingCount", "simTime"}
 _RANGE_RE = re.compile(r"^(-?\d+[smhdwy]|now\(\)|now|\d{4}-\d{2}-\d{2}T[\d:.]+Z)$")
 _EVERY_RE = re.compile(r"^\d+[smhdw]$")
 _SCENARIO_RE = re.compile(r"^[A-Za-z0-9_.:-]{1,64}$")  # guards the Flux scenario_id filter
