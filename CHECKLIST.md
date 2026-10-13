@@ -53,8 +53,16 @@ _Updated 2026-10-03._
       one-way fan-out, so there's no back-channel to the running sim. To support it: add a
       control route on the WebSocket API (or drive injection through the HTTP control API)
       **and** have the producer hold/read an inbound connection that applies
-      `incident_from_control` each tick on the sim host. Larger build; the cloud workaround
-      today is **Start road block** (fresh run with the edge closed). See `docs/Q&A.md` Q3.
+      `incident_from_control` each tick on the sim host. **Concrete approach (~8–12h):**
+      browser → `POST /inject?edge=` (token) → control Lambda `postToConnection()` to the
+      producer's WS connection (API Gateway WS is bidirectional); the emitter's
+      `CloudForwarder` reads inbound frames into a control inbox that `run_traci` drains each
+      tick → `IncidentController`. New bits: producer-side inbound read; register the
+      producer's connectionId by role on `$connect` (re-register on reconnect, in the
+      connections table); the `/inject` route + `execute-api:ManageConnections` IAM on the
+      control Lambda. Reuses `incidents.py`, the auth token and the connections table. Needs
+      live-AWS testing (reconnect edge-cases). Cloud workaround today is **Start road block**
+      (fresh run with the edge closed). See `docs/Q&A.md` Q3.
 - [ ] **More scenario comparisons — unique per-edge road-block id + extra presets.**
       (1) Tag each click-a-road closure with a **unique `scenario_id` per edge** (e.g.
       `rb_<sanitised-edge>`, stripping chars not in the scenario filter `[A-Za-z0-9_.:-]`)
