@@ -95,6 +95,15 @@ dashboard displaying that streamed output, and a set of decision-support feature
 work is scoped to a 300-hour budget and framed as a cloud and streaming-data engineering
 extension of the existing simulation.
 
+![Existing simulation pipeline](img/existing_pipeline.png)
+
+*Figure 1. Existing simulation pipeline (prior work, shown for context). The Christchurch
+CBD model as inherited from the host company: an offline Python pipeline calibrates a SUMO
+road network and vehicle demand from Christchurch City Council and Miovision traffic data,
+which the SUMO 2D engine runs and streams to a Unity 3D visualisation over TraCI. Both the
+build-time pipeline and the Unity 3D twin predate this project; this project extends the
+live TraCI output (Figure 2) and does not modify the calibrated model or the 3D renderer.*
+
 ## 1.2. Problem
 
 The existing simulation produces realistic, calibrated vehicle and public-transport
@@ -251,14 +260,20 @@ to the author's review of all generated code (§5.2).
 
 One **producer** (SUMO + the TraCI emitter) feeds one of two interchangeable
 **pipelines** — a local InfluxDB stack or the AWS cloud stack — and a single HTML
-**dashboard** points at whichever endpoints it is given (Figure 1).
+**dashboard** points at whichever endpoints it is given (Figure 2).
 
-![System architecture](img/architecture.png)
+![Integrated system architecture](img/integrated_architecture.png)
 
-*Figure 1. System architecture. The producer (`run_traci.py --emit`) streams
-vehicle-state JSON over WebSocket to the dashboard and, in parallel, to a local InfluxDB
-pipeline and/or the AWS cloud pipeline; the dashboard reads history from the local replay
-server or the cloud replay Lambda. Full data-flow, local and cloud deployment views and a
+*Figure 2. Integrated system architecture. The inherited build-time SUMO pipeline (top,
+unchanged) feeds the calibrated model into the SUMO 2D engine. The contribution of this
+project is the live path (components marked NEW): a TraCI client (`run_traci.py` + emitter)
+serialises each simulation step to JSON, converts SUMO XY coordinates to WGS84, and forwards
+snapshots over a WebSocket to an AWS pipeline (API Gateway → ingest / metrics / replay
+Lambdas → DynamoDB connection registry), which fans live ticks out to a Leaflet browser
+dashboard and writes per-tick metrics to InfluxDB Cloud for history, comparison and replay.
+Solid arrows carry build-time data; the live runtime path flows left-to-right from the
+simulation core through the cloud pipeline to the browser. The same dashboard can instead be
+pointed at the local InfluxDB stack; full data-flow, local and cloud deployment views and a
 component/port reference are in the repository's `docs/ARCHITECTURE.md`.*
 
 **Component interaction.** `run_traci.py` drives SUMO through TraCI and, each tick,
@@ -272,6 +287,27 @@ The dashboard renders the live feed and queries history through a read endpoint
 injected by `incidents.py` (close edge/lane, speed limit, demand surge) with
 apply-and-revert semantics; `control_server.py` lets a non-technical user start named
 scenarios and inject incidents from the browser.
+
+**Decision-support control path.** The same backbone carries the project's decision-support
+layer. From the browser, a non-technical user selects a named scenario (or clicks a road to
+close) which, in the cloud deployment, calls an authenticated control API (API Gateway → a
+token authorizer → a `traffic-control` Lambda) that uses AWS Systems Manager to switch the
+scenario on the EC2 sim host; the resulting run is tagged with a `scenario_id` so its metrics
+can be compared against the baseline in the dashboard's Compare and Impact views.
+
+<!-- Figure 7 (optional): decision-support / control flow diagram — TO PRODUCE.
+     Suggested boxes (left→right): Browser (Scenario control panel: Start preset / click-a-road)
+       → Control API Gateway (token-authenticated) → control-authorizer Lambda
+       → traffic-control Lambda (preset allowlist + validated edge) → SSM SendCommand
+       → EC2 sim host (restart sumo-emitter with scenario_id) → [same live path as Figure 2]
+       → InfluxDB Cloud (tagged by scenario_id) → dashboard Compare / Impact views.
+     Once drawn, save as docs/img/decision_support_flow.png and uncomment the two lines below
+     (it renders here as Figure 7, after the §4.1 screenshots Figures 3–6). -->
+<!-- ![Decision-support control and comparison flow](img/decision_support_flow.png) -->
+<!-- *Figure 7. Decision-support control path. A browser action (named preset or click-a-road
+closure) drives the authenticated cloud control API, which switches the tagged scenario on the
+sim host via SSM; the resulting `scenario_id`-tagged metrics feed the Compare and Impact views,
+closing the loop from "what if?" to measured impact.* -->
 
 ## 3.3. Risks and Challenges
 
@@ -368,12 +404,12 @@ the dashboard impact report (and reproduced on the command line by
 **Figures (screenshots to capture from the running dashboard; place in Appendix A if
 large):**
 
-- *Figure 2. Live dashboard — speed-coloured vehicles on the CBD map with the three live
+- *Figure 3. Live dashboard — speed-coloured vehicles on the CBD map with the three live
   metric panels.*
-- *Figure 3. Compare view — baseline vs incident overlaid for a metric, with the
+- *Figure 4. Compare view — baseline vs incident overlaid for a metric, with the
   quantified summary line.*
-- *Figure 4. Impact report — baseline-vs-incident table with directional deltas.*
-- *Figure 5. Congestion-alert overlay — slow segments flagged red on the network.*
+- *Figure 5. Impact report — baseline-vs-incident table with directional deltas.*
+- *Figure 6. Congestion-alert overlay — slow segments flagged red on the network.*
 
 **How to produce the evidence.** With the stack running (`docker compose up`, or
 `start_demo.sh`), start each preset from the dashboard, then run:
@@ -547,5 +583,5 @@ https://www.openstreetmap.org/
 **URL for the Deployed App:** [to complete — hosted CloudFront dashboard URL once the
 hosted deploy is finished; see §5.3 limitations]
 
-*Supplementary evidence to attach here (optional): dashboard screenshots (Figures 2–5),
+*Supplementary evidence to attach here (optional): dashboard screenshots (Figures 3–6),
 a CI run summary, and the `scripts/capture_results.py` output for Table 1.*
