@@ -1034,6 +1034,22 @@
   const HIST_EVERY = { "-15m": "", "-1h": "1m", "-6h": "5m", "-24h": "15m" };
   let histChart = null;
 
+  // History series (no scenario filter). Mirrors the Compare fetch so the
+  // History chart can plot on the simulation clock instead of wall-clock time.
+  async function fetchHistSeries(field, range, every) {
+    let url = REPLAY_URL + "?field=" + encodeURIComponent(field) + "&start=" + encodeURIComponent(range);
+    if (every) url += "&every=" + encodeURIComponent(every);
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error("HTTP " + resp.status);
+    return (await resp.json()).points || [];
+  }
+  // simTime for the History range — non-fatal (returns [] so History falls back
+  // to wall-clock labels if the replay endpoint doesn't serve simTime).
+  async function fetchHistSimSeries(range, every) {
+    try { return await fetchHistSeries("simTime", range, every); }
+    catch (e) { return []; }
+  }
+
   async function loadHistory() {
     const statusEl = document.getElementById("hist-status");
     if (typeof Chart === "undefined") { statusEl.textContent = "Chart.js not loaded"; return; }
@@ -1041,26 +1057,58 @@
     const range = document.getElementById("hist-range").value;
     const every = HIST_EVERY[range] || "";
 
-    let url = REPLAY_URL + "?field=" + encodeURIComponent(field) + "&start=" + encodeURIComponent(range);
-    if (every) url += "&every=" + every;
     statusEl.textContent = "loading…";
     try {
-      const resp = await fetch(url);
-      if (!resp.ok) { statusEl.textContent = "error " + resp.status; return; }
-      const data = await resp.json();
-      const pts = data.points || [];
-      renderHist(field, range, pts);
+      const [pts, sim] = await Promise.all([
+        fetchHistSeries(field, range, every),
+        fetchHistSimSeries(range, every),
+      ]);
+      renderHist(field, range, pts, sim);
       statusEl.textContent = pts.length + " points";
     } catch (err) {
       statusEl.textContent = "fetch failed — is the replay server running?";
     }
   }
 
-  function renderHist(field, range, pts) {
+  function renderHist(field, range, pts, sim) {
     // Stored data is m/s (matches SUMO/InfluxDB); show avgSpeed as km/h for readers.
     const toKmh = field === "avgSpeed";
     const titleField = toKmh ? "avgSpeed (km/h)" : field;
+    // Join with the simTime series so the x-axis is the SIM clock (06:30→07:30),
+    // matching Live metrics and Compare, instead of the wall-clock write times.
+    const dataXY = _toSimXY(pts, sim, toKmh);
+    const haveSim = dataXY.length > 0;
     if (histChart) histChart.destroy();
+
+    if (haveSim) {
+      histChart = new Chart(document.getElementById("chart-hist").getContext("2d"), {
+        type: "line",
+        data: {
+          datasets: [{
+            data: dataXY,
+            borderColor: "#0e7c72", backgroundColor: "#0e7c72",
+            borderWidth: 1.5, pointRadius: 0, tension: 0.25, fill: false,
+          }],
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false, animation: false,
+          plugins: {
+            legend: { display: false },
+            title: { display: true, text: titleField + " · sim time", font: { size: 11 } },
+          },
+          scales: {
+            x: { type: "linear",
+                 title: { display: true, text: "sim time", font: { size: 9 } },
+                 ticks: { maxTicksLimit: 4, font: { size: 9 },
+                          callback: function (v) { return fmtClock(v).slice(0, 5); } } },
+            y: { beginAtZero: true, ticks: { maxTicksLimit: 4, font: { size: 9 } } },
+          },
+        },
+      });
+      return;
+    }
+
+    // Fallback (no simTime from the replay endpoint): original wall-clock labels.
     histChart = new Chart(document.getElementById("chart-hist").getContext("2d"), {
       type: "line",
       data: {
