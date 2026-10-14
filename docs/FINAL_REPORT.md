@@ -295,19 +295,14 @@ token authorizer → a `traffic-control` Lambda) that uses AWS Systems Manager t
 scenario on the EC2 sim host; the resulting run is tagged with a `scenario_id` so its metrics
 can be compared against the baseline in the dashboard's Compare and Impact views.
 
-<!-- Figure 7 (optional): decision-support / control flow diagram — TO PRODUCE.
-     Suggested boxes (left→right): Browser (Scenario control panel: Start preset / click-a-road)
-       → Control API Gateway (token-authenticated) → control-authorizer Lambda
-       → traffic-control Lambda (preset allowlist + validated edge) → SSM SendCommand
-       → EC2 sim host (restart sumo-emitter with scenario_id) → [same live path as Figure 2]
-       → InfluxDB Cloud (tagged by scenario_id) → dashboard Compare / Impact views.
-     Once drawn, save as docs/img/decision_support_flow.png and uncomment the two lines below
-     (it renders here as Figure 7, after the §4.1 screenshots Figures 3–6). -->
-<!-- ![Decision-support control and comparison flow](img/decision_support_flow.png) -->
-<!-- *Figure 7. Decision-support control path. A browser action (named preset or click-a-road
-closure) drives the authenticated cloud control API, which switches the tagged scenario on the
-sim host via SSM; the resulting `scenario_id`-tagged metrics feed the Compare and Impact views,
-closing the loop from "what if?" to measured impact.* -->
+![Decision-support control and comparison flow](img/decision_support_flow.png)
+
+*Figure 7. Decision-support control path. A browser action (named preset or click-a-road
+closure) drives the authenticated cloud control API (API Gateway → token authorizer →
+`traffic-control` Lambda, with a preset allowlist and a regex-validated edge id), which
+switches the tagged scenario on the EC2 sim host via AWS Systems Manager. The run reuses the
+same live path as Figure 2, and its `scenario_id`-tagged metrics feed the dashboard's Compare
+and Impact views — closing the loop from "what if?" to measured impact.*
 
 ## 3.3. Risks and Challenges
 
