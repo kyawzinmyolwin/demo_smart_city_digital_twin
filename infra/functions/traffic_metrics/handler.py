@@ -68,6 +68,11 @@ def lambda_handler(event, context):
     try:
         with urllib.request.urlopen(req, timeout=10) as resp:
             resp.read()
+        # Log the exact line written. CloudWatch tags every log line with the
+        # invocation RequestId, so this one line lets a CloudWatch record be
+        # matched 1:1 to the resulting InfluxDB point (same scenario_id + field
+        # values) without storing the RequestId in InfluxDB.
+        print(f"wrote point: {line}")
     except urllib.error.HTTPError as exc:
         # Surface the InfluxDB error body in the logs for debugging.
         print(f"InfluxDB write failed {exc.code}: {exc.read().decode('utf-8', 'replace')}")
