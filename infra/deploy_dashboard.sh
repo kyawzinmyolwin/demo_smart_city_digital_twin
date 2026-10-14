@@ -56,6 +56,19 @@ if [[ -f "$edges" ]]; then
   paths="$paths /edges.geojson"
 fi
 
+# The map loads the intersection nodes from ../data/output/intersection_geo.csv,
+# which resolves to /data/output/intersection_geo.csv when served at the bucket
+# root — upload it there so the hosted page can fetch it (otherwise it 404s and
+# shows the "Could not load intersection_geo.csv" banner).
+csv="../smart_city_digital_twin/2D_simulation/data/output/intersection_geo.csv"
+if [[ -f "$csv" ]]; then
+  echo "uploading intersection_geo.csv -> s3://$bucket/data/output/ ..."
+  aws s3 cp "$csv" "s3://$bucket/data/output/intersection_geo.csv" --content-type "text/csv"
+  paths="$paths /data/output/intersection_geo.csv"
+else
+  echo "intersection_geo.csv missing ($csv); the intersection layer will 404" >&2
+fi
+
 dist=$(aws cloudfront list-distributions \
         --query "DistributionList.Items[?DomainName=='$domain'].Id | [0]" --output text)
 echo "invalidating CloudFront ($dist) ..."
