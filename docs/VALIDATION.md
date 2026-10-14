@@ -69,6 +69,28 @@ On the current demand this reports 24 links, total observed 7159 vs loaded 7072 
 GEH < 5 for 100 % of links — i.e. the demand is loaded essentially intact; the `--sim` run
 is what measures whether the *running* simulation still matches once congestion is in play.
 
+## Result (current model, AM peak 06:30–07:30)
+
+From a headless `--sim` run over the 24 busiest origin links:
+
+| Metric | Value |
+|---|---|
+| Links compared | 24 |
+| GEH < 5 | **88 %** (21/24) — meets the ≥ 85 % target |
+| GEH < 10 | 92 % (22/24) |
+| Mean absolute error | 8 % |
+| Total observed vs simulated | 7159 vs 5596 (**−21.8 %**) |
+
+The baseline reproduces the real counts on the large majority of links to within a few
+percent. The total deficit is **concentrated at one saturated bottleneck**: the Manchester
+Street southbound approach at High/Lichfield (`-139811056#1`) inserts only 215 of 1353
+demanded vehicles, accounting for ~73 % of the whole shortfall; the next worst
+(`-988781906`) accounts for most of the remainder. This is **insertion backlog under peak
+congestion** — SUMO holds vehicles at the entry edge when the downstream network is
+saturated — not lost demand. Re-running with a longer window (e.g. `--end 30000`) lets the
+backlog clear and the deficit shrink; keep the 1-hour window for the GEH figure itself,
+since GEH is defined on hourly flows.
+
 ## Options
 
 - `--begin` / `--end` — window in sim seconds (default 23400–27000).
