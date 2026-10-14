@@ -175,6 +175,96 @@ Deferred / de-prioritised by the pivot:
 
 ## Current status (updated 2026-08-19)
 
+<!-- ============================================================= -->
+## SESSION LOG — 2026-10-14 (report finalisation + real-data validation + cloud evidence)
+
+**Working branch:** `claude/next-step-nun1nw` (all work below committed + pushed; CI green; PR #19 open).
+Main is far behind — keep developing on this branch.
+
+**The report (two lineages — don't confuse them):**
+- The author's authoritative doc is now **`Draft_Final_Report_v5`** (they hand-edit it in Word; added
+  real screenshots; evidence moved to Appendix A `Figure_A1..`, deployment evidence in Appendix B
+  `Figure_B1..B7`). We only have the **PDF** of v5, not the .docx.
+- Earlier, we maintained **`Draft_Final_Report_v1_REVISED.docx`** (edited via unzip→edit
+  `word/document2.xml`→rezip, in scratchpad `draftreview/unpacked/`). The author has since moved to
+  v5, so v1_REVISED is superseded — but the XML-editing workflow there is the template for docx edits.
+- `docs/FINAL_REPORT.md`/`.docx` in the repo is an OLDER version (not synced to the author's draft).
+- Report structure follows the official COMP693 template; project is **Industry-Mentored**, host
+  **JIX Reality**, author **Kyaw Zin Myo Lwin (ID 1169799)**, mentor **Hansi Udapola**, date 18 Oct 2026.
+
+**Decision-support twin — Option A validation (DONE):** `scripts/validate_against_counts.py` validates
+the baseline SUMO run against the real CCC/Miovision counts that generated its demand, scored with the
+**GEH statistic** (industry standard; DfT TAG M3.1 defines the "GEH<5 for ≥85% of links" target).
+- Observed demand = per-`from`-edge sum of `<flow number>` in `traffic_trips.rou.xml` (the counts, as
+  loaded). Simulated = per-edge `departed` from a SUMO `edgeData` run. Join + GEH + summary.
+- Helpers (`geh`, `compare`, `summarise`, parsers) pure + **11 unit tests** (`test_validate_against_counts.py`).
+- `scripts/validation/edgedata_am.add.xml` = edgeData collector for AM peak (06:30–07:30 = sim 23400–27000).
+- `docs/VALIDATION.md` = methodology + run recipe + honest framing (calibration/consistency check,
+  NOT independent field validation) + the real result.
+- **Real result (cited in report):** 24 links, GEH<5 for **88% (21/24)** — meets ≥85% target; GEH<10 92%;
+  mean |err| 8%; total observed 7159 vs simulated 5596 (**−21.8%**). Deficit concentrated at ONE bottleneck
+  — Manchester St southbound `-139811056#1` (215/1353 inserted, ~73% of shortfall) = insertion backlog
+  under peak congestion, not lost demand.
+
+**Test count is now 111** (was 100): 66 core (`scripts/tests`) + 45 ETL (`scripts/etl/tests`). Core
+breakdown: incidents 14, control_server 11, cloud control 9, **validation 11**, emitter 6, metrics 6,
+capture_results 5, replay_server 4. Reproduce per-file counts:
+`python3 -m pytest scripts/tests scripts/etl/tests --collect-only -q | sed 's/::.*//' | grep '\.py$' | sort | uniq -c`.
+(In a fresh cloud box the ETL tests may fail on moto version — pins live in `requirements-dev.txt`; CI is green.)
+
+**Dashboard fixes (pushed; author re-deployed, confirmed live):**
+- `infra/deploy_dashboard.sh` now uploads `intersection_geo.csv` to `s3://<bucket>/data/output/` — fixes
+  the hosted "Could not load intersection_geo.csv" banner (the HTML fetches `../data/output/…` →
+  `/data/output/…` at the CloudFront root; only HTML+edges.geojson were uploaded before).
+- `intersection_map.html` History panel now plots on the **sim clock** (fetches `simTime` series, joins via
+  `_toSimXY`, HH:MM axis, wall-clock fallback) — matches Live metrics + Compare. `node --check` passes.
+
+**Cloud evidence helpers added:**
+- `infra/functions/traffic_metrics/handler.py` now `print`s the written line-protocol on success, so a
+  CloudWatch RequestId ↔ the InfluxDB point correlate 1:1 (same scenario_id + field values). **Needs
+  `terraform apply` to take effect.** (Option 2 of the CloudWatch↔InfluxDB-join question.)
+- Evidence recipes given to author (not code): R2 Lambda metrics via `aws lambda invoke` (payload tagged
+  `scenario_id=r2_metrics_evidence` → `{ok:true,vehicleCount:5}` + CloudWatch + InfluxDB point); WS API
+  "receiving data" via a two-client `wscat` demo (send on A, fan-out received on B; route selection
+  `$request.body.action`, fan-out skips sender). Redaction: blur AWS account IDs (secret ARNs), live
+  endpoint ids, `sim_host_public_ip`; never share `control_api_token`/InfluxDB token.
+- Two clocks: InfluxDB row timestamp = wall-clock write time (keeps runs separate; retention/range
+  queries work); `simTime` is a field the dashboard plots against. Defensible event-time-vs-processing-time
+  design — do NOT set the row timestamp to sim-time (would collide across runs).
+
+**Report limitations added (in v5 + v1_REVISED):** data-dependency limitation — the whole model's accuracy
+is bounded by the CCC/Miovision counts (historical, peak-snapshot, surveyed-intersections-only, aged).
+Added to both §5.3 Conclusions (full) and Executive Summary (one line, in v1_REVISED).
+
+**OPEN — v5 report compliance fixes (requested a check vs COMP693 grading rubric; not yet applied —
+author must send the v5 .docx):**
+1. Unify test count to **111** (Exec Summary says "100", Conclusions "100+", §4.2 "111").
+2. §4.2 figure numbering broken: lead-in cites Figs 8/9/10 but labels are 9/10/12, **Figure 11 skipped**,
+   "Figure _10" stray space. Renumber testing figs 9(CI)/10(local)/11(terraform)/12(validation) + fix refs.
+3. **Duplicate `Figure_A3`** (Lambda Functions + Lambda metrics) → renumber Appendix A A1–A9; fix Requirements
+   table (R2 Lambda metrics points to A1, should point to the Lambda-metrics figure).
+4. References: move **Department for Transport (2024)** into alphabetical order (after Deng, before Docker).
+5. **Cite DfT TAG in-text** at the GEH ≥85% claim in §4.2 (currently uncited reference).
+6. Standardise figure caption punctuation; remove title-page grey highlight; add in-text citations for
+   tool refs (SUMO=Lopez et al. 2018, etc.); verify Appendix A has the GitHub + deployed CloudFront URLs.
+
+**Rubric note:** report-relevant criteria are **1–6** (7–8 = presentation/viva, deferred). Report content
++ structure fully comply; open items are accuracy/citation polish. Grading = single global grade, mid-point
+of band = mark; greatest weight on appropriateness/quality/method/originality/reflection.
+
+**docx-editing workflow (for future report edits):** `pip install defusedxml lxml`; unpack with
+`unzip`; main part is `word/document2.xml` (NOT document.xml — merge_runs.py hardcodes the wrong name, so
+edit XML directly); runs are mostly whole (Google-Docs export); escape `& < >`; rezip `zip -Xqr`; render
+check via `soffice.py --convert-to pdf` + `pdftoppm` (pdftotext page numbers are off-by-one vs pdftoppm).
+Export md→docx via `pandoc --resource-path=docs` with arrows ASCII-replaced (`→`→`->`) for font compat.
+Mermaid→PNG via `npx @mermaid-js/mermaid-cli@11.4.2 -p puppeteer.json` (chromium at
+`/opt/pw-browsers/chromium-1194/chrome-linux/chrome`, `--no-sandbox`).
+
+**Commit footer (this session):**
+`Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>` +
+`Claude-Session: https://claude.ai/code/session_01JPrcUrs3JqCy2UmTJDjuip`. No model id in commits/PRs.
+<!-- ============================================================= -->
+
 **Done (all merged to main)**
 - Phase 1 emitter: `scripts/emitter.py` (`serialize_vehicles`, `Broadcaster`, async WS server)
   plus `run_traci.py --emit`. Unit-tested (`scripts/tests/test_emitter.py`), verified live.
