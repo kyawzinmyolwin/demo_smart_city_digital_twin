@@ -120,6 +120,58 @@ real scenario results in the report.
 - [ ] On the hosted page, re-run `terraform apply` + fresh `scenario_id` runs so the cloud compare view has tagged data
 - [ ] Rebuild intersection-graph net if you want the counts→CBD scenarios (needs `christchurch_intersections.net.xml`)
 
+## 🧹 Cleanup candidates (unused / stale files)
+
+Found by scanning tracked files for references across the repo (imports, docs, CI,
+compose, shell, Terraform; Unity trees excluded). **Verify before deleting — git history
+preserves everything, and some are legitimate one-time build artefacts worth keeping.**
+
+### A. Safe to remove — backups / one-off / superseded (0 references)
+- [ ] `smart_city_digital_twin/2D_simulation/scripts/run_traci_original.py` — pre-`--emit`
+      backup of `run_traci.py` (175 vs 439 lines); superseded, and history has it.
+- [ ] `smart_city_digital_twin/2D_simulation/scripts/probe_drive.py` — one-off Google
+      Drive API probe from the ETL build.
+- [ ] `smart_city_digital_twin/2D_simulation/scripts/bench_build_simulation.py` — one-off
+      build benchmark.
+- [ ] `smart_city_digital_twin/2D_simulation/scripts/calibrate_christchurch_icp.py` —
+      superseded ICP calibration variant (`calibrate_christchurch.py` is the one referenced).
+
+### B. Out-of-scope (3D / Unity-only; FBX calibration — 0 references in the 2D/cloud project)
+- [ ] `smart_city_digital_twin/2D_simulation/scripts/calibrate_fbx_landmarks.py`
+- [ ] `smart_city_digital_twin/2D_simulation/scripts/calibrate_fbx_sumo_transform.py`
+
+### C. One-time build / export tools (0 references; keep for reproducibility OR move to a `scripts/tools/` subdir)
+These generated data that is already committed; they are not called by active code, tests
+or CI. Keeping them documents how the network/demand were built — decide keep vs archive.
+- [ ] `scripts/create_timetable_buses.py`, `scripts/export_bus_route_edges.py`,
+      `scripts/export_intersections_from_ids.py`
+- [ ] `scripts/randomTrips.py` — a vendored copy of SUMO's stock tool (ships in
+      `$SUMO_HOME/tools`); unused here.
+
+### D. Stale / orphaned docs
+- [ ] `TUTORIAL.md` — **0 references** anywhere; orphaned.
+- [ ] `docs/FINAL_REPORT.md` + `docs/FINAL_REPORT.docx` — an **older** report version,
+      superseded by the author's external v5. Decide: refresh the repo copy from v5, or
+      drop it and keep the authoritative report external. (`.docx` is also the only tracked
+      binary blob.)
+- [ ] `docs/img/architecture.png` — only referenced by the stale `FINAL_REPORT.md`; the
+      current figures use `integrated_architecture.png` / `existing_pipeline.png`. Drop
+      together with the old report.
+- [ ] `RECAP.md` — linked only from `METRICS_REPLAY.md`; review whether it is
+      portfolio-facing or a personal recap that can go.
+
+### E. Large out-of-scope directories (decide separately — structural change)
+- [ ] `Unity_fundamental/` — **155 tracked files**; CLAUDE.md calls it an "unrelated
+      tutorial project, ignore". Strongest single de-bloat (repo is 2012 files; this + 3D
+      are ~22%). Remove from this repo unless it's intentionally part of the portfolio.
+- [ ] `smart_city_digital_twin/3D_simulation/` — **284 tracked files**; the Unity 3D twin,
+      "out of scope for this project". Keep only if the portfolio means to show the host
+      company's broader system; otherwise it belongs in its own repo.
+
+> Suggested order: do A + D first (low-risk, clear wins), then decide C (keep vs `tools/`),
+> then B and E (bigger structural calls). A quick `git rm` per item + one commit; CI (the
+> 111 tests) should stay green since none of A–D are imported by tested code.
+
 ---
 
 **Headline:** the decision-support feature set, **Milestone 5 (Docker Compose + CI/CD)**,
