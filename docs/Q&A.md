@@ -198,3 +198,56 @@ still demonstrates incident impact via Compare / Impact report.
 Documented in `CLAUDE.md` and the report's §11 limitations ("Cloud click-to-inject is
 local-only"). A true cloud live-inject is a deferred larger build (see CHECKLIST planned
 improvements).
+
+---
+
+## Q4. Why does the cloud pipeline use AWS Lambda, but the local pipeline doesn't?
+
+**Key point: Lambda is AWS-managed serverless compute — it only exists on AWS. Locally,
+the *same pure logic* runs inside an ordinary long-running process instead. The behaviour
+is identical; only the host that runs it differs.**
+
+The metrics step is the clearest example. The actual computation is one pure function,
+`compute_tick_metrics` (`scripts/metrics.py`):
+
+- **Cloud:** that function is the body of the **`traffic-metrics` Lambda** — the file is
+  copied verbatim into `infra/functions/traffic_metrics/` and invoked per snapshot.
+- **Local:** the **same** `compute_tick_metrics` is imported and called by
+  `metrics_writer.py`, a long-running process that reads the WebSocket feed and writes to
+  local InfluxDB.
+
+So there is no duplicated or diverging logic — just two runtimes for one function.
+
+### Why a different host in each environment
+
+1. **Lambda is an AWS service; it can't run on a laptop.** Off-AWS there is no API
+   Gateway or Lambda. You *could* emulate it (AWS SAM / LocalStack), but that is heavy
+   tooling for no benefit in a self-contained dev/demo stack.
+2. **Each model fits its environment.** In the cloud, an **event-driven, serverless**
+   function is ideal: it **scales to zero** (near-zero idle cost — the whole stack is
+   ~$1–2/month idle), auto-scales per message, and needs no server to manage — exactly
+   right for a bursty pipeline on a student budget. Locally, the stack is already **one
+   machine up via Docker Compose**, so a **plain long-running container process** is
+   simpler: no API Gateway, no cold-start latency, no per-invoke overhead, nothing to
+   emulate.
+3. **The design deliberately separates pure logic from its runtime.** Because
+   `compute_tick_metrics` is a pure, unit-tested function, the *same* code is hosted by a
+   serverless function in the cloud and a long-running process locally, and both produce
+   **identical metrics**. That is what makes the two pipelines interchangeable.
+
+### The full local ↔ cloud mapping
+
+| Role | Cloud (AWS) | Local (Docker Compose) |
+|---|---|---|
+| Ingest / fan-out to browsers | `traffic-ingest` Lambda (via WebSocket API Gateway + DynamoDB connections) | the emitter's own WebSocket server broadcasts directly (point-to-point on one machine — no separate ingest needed) |
+| Per-tick metrics → InfluxDB | `traffic-metrics` Lambda (`compute_tick_metrics`) | `metrics_writer.py` (same `compute_tick_metrics`) |
+| History / replay read API | `traffic-replay` Lambda | `replay_server.py` (stdlib HTTP server) |
+| Time-series store | InfluxDB Cloud | InfluxDB container |
+
+**Framing for the viva:** this is a *separation of concerns* — application logic
+(pure functions) vs. the infrastructure that hosts it. The cloud uses serverless Lambda
+because it is cost-efficient and auto-scaling for an intermittent public pipeline; the
+local stack uses a long-running process because, on a single already-running machine, that
+is the simplest right-sized host. Sharing `compute_tick_metrics` across both guarantees the
+local and cloud results match, which is also why the metrics are tested once and trusted
+everywhere.
