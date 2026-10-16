@@ -82,8 +82,9 @@ From a headless `--sim` run over the 24 busiest origin links:
 | Total observed vs simulated | 7159 vs 5596 (**−21.8 %**) |
 
 The baseline reproduces the real counts on the large majority of links to within a few
-percent. The total deficit is **concentrated at one saturated bottleneck**: the Manchester
-Street southbound approach at High/Lichfield (`-139811056#1`) inserts only 215 of 1353
+percent. The total deficit is **concentrated at one saturated bottleneck**: Durham Street
+South southbound at the Durham South / Moorhouse intersection (`-139811056#1`, I2859 — per
+`scripts/edge_to_intersection.py`) inserts only 215 of 1353
 demanded vehicles, accounting for ~73 % of the whole shortfall; the next worst
 (`-988781906`) accounts for most of the remainder. This is **insertion backlog under peak
 congestion** — SUMO holds vehicles at the entry edge when the downstream network is

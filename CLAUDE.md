@@ -203,7 +203,9 @@ the baseline SUMO run against the real CCC/Miovision counts that generated its d
   NOT independent field validation) + the real result.
 - **Real result (cited in report):** 24 links, GEH<5 for **88% (21/24)** — meets ≥85% target; GEH<10 92%;
   mean |err| 8%; total observed 7159 vs simulated 5596 (**−21.8%**). Deficit concentrated at ONE bottleneck
-  — Manchester St southbound `-139811056#1` (215/1353 inserted, ~73% of shortfall) = insertion backlog
+  — Durham Street South southbound `-139811056#1` (at I2859, Durham South/Moorhouse; verified via
+  scripts/edge_to_intersection.py — the demand CSV's "Manchester St" approach header mislabels it)
+  (215/1353 inserted, ~73% of shortfall) = insertion backlog
   under peak congestion, not lost demand.
 
 **Test count is now 111** (was 100): 66 core (`scripts/tests`) + 45 ETL (`scripts/etl/tests`). Core
