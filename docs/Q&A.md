@@ -317,3 +317,35 @@ baseline defensible (and what the GEH validation in §4.2 checks the simulation 
 The build is deterministic and re-runnable (`create_network.py` → `create_demand.py`), but
 the committed outputs are treated as fixed inputs so the streaming/cloud work builds on a
 stable model.
+
+### Relationship to the ETL pipeline (report §3.5)
+
+The **demand** chain above (`CCC Miovision counts → parser → CSV → flows → duarouter →
+routed.rou.xml`) has an automated, cloud-native front-end: the **ETL pipeline** documented in
+report §3.5 (`scripts/etl/`). They use the **same data source** (CCC Miovision counts) and the
+**same parser** (`traffic_counts_parser.py`, which `etl/counts_etl.py` wraps), and they meet at
+one file — the **counts CSV**:
+
+```
+CCC Google Drive ─drive_client▶ counts_etl (wraps parser) ─▶ S3 processed JSON ─scenario_bridge▶ counts CSV
+                                                                                                    │
+                                        ┌───────────────────────────────────────────────────────────┘
+                                        ▼
+                        sumo_demand_from_traffic_csv.py ─flows▶ …rou.xml ─duarouter▶ routed.rou.xml
+                        (Q5 step 2 resumes here — identical from the CSV onward)
+```
+
+Three points for the viva:
+- **Scope.** The ETL feeds only the **demand** branch (counts → `rou.xml`). It does **not** touch
+  `net.xml` or `add.xml` — those come from OpenStreetMap via `netconvert`/`polyconvert`, not counts.
+- **One-time vs repeatable.** The Q5 chain was run **once** to produce the committed, "do-not-modify"
+  baseline core. The ETL is the **repeatable acquisition/refresh** version of its counts front-end —
+  automated Drive fetch, manifest change-detection, defensive rejection of non-vehicle files, S3 storage.
+- **It is the "rebuild from updated data" path.** If the council publishes newer counts, the ETL pulls
+  and cleans them and `scenario_bridge.py` lands a fresh CSV; `sumo_demand_from_traffic_csv.py` →
+  `duarouter` then rebuilds `rou.xml` — i.e. this Q5 chain re-run on ETL-sourced data.
+
+**Honest note:** the *delivered* baseline's `routed.rou.xml` was built by this Q5 chain from counts
+obtained directly, not routed through the live ETL. The ETL is the productionised, cloud-engineering
+version of that counts-acquisition front-end (and a standalone AWS showcase) — it demonstrates *how*
+the demand is sourced and refreshed at scale, feeding the exact same build from the CSV onward.
