@@ -84,3 +84,45 @@ variable "sim_host_instance_type" {
   type        = string
   default     = "t3.medium"
 }
+
+variable "sim_host_git_ref" {
+  description = <<-EOT
+    Git ref (branch, tag or commit) the sim host checks out when it boots. Defaults
+    to the repo default branch (main). Set to a feature branch to demo work that
+    isn't merged yet, e.g. -var 'sim_host_git_ref=claude/next-step-nun1nw'. Changing
+    this replaces the instance (user_data change), so it re-clones the chosen ref.
+  EOT
+  type        = string
+  default     = "main"
+}
+
+# --- ETL: CCC traffic-count workbooks (etl.tf) --------------------------------
+variable "etl_data_bucket_name" {
+  description = <<-EOT
+    S3 bucket for ETL data (raw/processed/rejected workbooks + the manifest).
+    Bucket names are one global namespace, so this has no default — pick a unique
+    lowercase-hyphen name (e.g. christchurch-twin-traffic-data-<you>).
+  EOT
+  type        = string
+}
+
+variable "drive_folder_id" {
+  description = "Top Google Drive folder id for the public CCC intersection counts."
+  type        = string
+  default     = "1oP5gcuKR1bHB9Xn2B4ILZZd_LhpMggxU"
+}
+
+variable "etl_schedule_expression" {
+  description = "EventBridge schedule for the ingest Lambda (rate() or cron())."
+  type        = string
+  default     = "rate(7 days)"
+}
+
+variable "etl_max_files" {
+  description = <<-EOT
+    Optional cap on files handled per ingest run (empty string = no cap). Set a
+    number for a first bounded backfill; the manifest lets repeated runs resume.
+  EOT
+  type        = string
+  default     = ""
+}

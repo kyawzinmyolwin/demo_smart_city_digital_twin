@@ -27,6 +27,7 @@ def compute_tick_metrics(snapshot: dict[str, Any], *, slow_speed: float = SPEED_
     congestion_index = slow / n_speeds if n_speeds else 0.0
     return {
         "simId": snapshot.get("simId", "unknown"),
+        "scenarioId": snapshot.get("scenarioId", snapshot.get("simId", "unknown")),
         "simTime": snapshot.get("simTime"),
         "vehicleCount": count,
         "avgSpeed": round(avg_speed, 3),
