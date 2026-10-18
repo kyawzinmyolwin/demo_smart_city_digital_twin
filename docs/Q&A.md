@@ -349,3 +349,39 @@ Three points for the viva:
 obtained directly, not routed through the live ETL. The ETL is the productionised, cloud-engineering
 version of that counts-acquisition front-end (and a standalone AWS showcase) — it demonstrates *how*
 the demand is sourced and refreshed at scale, feeding the exact same build from the CSV onward.
+
+## Q6. In the Comparative Analysis we claim Deng et al. (2024) "does not incorporate decision-support features such as alerts, scenario comparison, or historical replay." How do we defend that negative claim?
+
+**Context.** This line (report §2, Comparative Analysis) is about a *comparator system*, not ours.
+Deng et al. (2024) is a peer-reviewed system that — like this project — streams SUMO data through a
+serverless AWS pipeline. We cite it to show that an AWS + SUMO streaming architecture is viable, then
+distinguish it to establish our contribution.
+
+**The defense (scope, not shortcoming).** The claim is phrased as *out-of-scope*, not *failure*:
+"designed to evaluate a specific control algorithm, not to function as a general-purpose dashboard.
+Consequently, it does not incorporate…". Their paper's purpose is a vehicle **speed-advisory control
+algorithm**; a planner-facing dashboard with alerts, baseline-vs-incident comparison, and historical
+replay is simply **not what that system set out to build**. So the absence is by design, and asserting
+it is fair — we are describing their stated scope, not grading them against ours.
+
+**If an examiner pushes:**
+- *"How do you know it lacks those features?"* — From the paper's own stated scope and reported
+  feature set: it is an evaluation of a control algorithm with latency targets, not a general-purpose
+  decision-support tool. We claim absence only for features outside that scope, and we hedge the
+  sentence with "designed to evaluate a specific control algorithm, not… a general-purpose dashboard".
+- *"Isn't that an unfair comparison?"* — No: we are not saying their system is deficient. We are
+  mapping the **feature landscape** to locate the gap this project fills. Deng et al. proves the cloud
+  streaming pipeline is feasible; it just was not built to be a planner's what-if tool.
+
+**The role of the line in the argument.** It is one half of the "neither comparator does the whole
+thing" case the Comparative Analysis makes:
+- **keshu-bara (2025):** a live SUMO dashboard, but single-machine, polling not streaming, no
+  persistence, no real cloud.
+- **Deng et al. (2024):** a real serverless AWS streaming pipeline, but no decision-support / dashboard
+  features *(this line)*.
+- **This project:** combines a calibrated real-city simulation + persistent cloud storage + a dashboard
+  *with* decision-support features — the integration neither comparator offers.
+
+So the sentence does rhetorical work: it shows that even the strongest existing cloud-SUMO system still
+lacks the planner-facing capabilities that are this project's contribution. The safe framing in the
+viva is always **"out of their scope," not "a gap in their work."**
