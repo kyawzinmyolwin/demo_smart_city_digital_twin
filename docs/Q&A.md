@@ -418,3 +418,54 @@ report** reports these fields together, not congestion in isolation):
 So the correct viva framing: *"the tool flags the directional change per metric; for an incident I
 interpret congestion together with throughput, because a closure can lower the network-average
 simply by keeping cars from entering."*
+
+## Q8. How do the live "Close live" / "Reopen road" buttons work — closing a road in the *running* simulation without restarting it?
+
+**In one line:** the dashboard sends a small JSON command back up the **same WebSocket** that
+streams vehicles; the simulation loop drains those commands each tick and applies/reverts them
+against the live TraCI connection — closing a road is "set the edge's lane speeds to ~0", reopening
+is "restore the saved speeds", with no restart. This is the **local** path (`--emit`); see Q3 for why
+the cloud uses *Start road block* instead.
+
+**The chain, end to end:**
+
+1. **Browser — one toggle button.** Click a road on the map to select its edge id. The button flips
+   between *Close live* and *Reopen road (resume)*. On click it calls `sendControl(...)`, which is just
+   `ws.send(JSON.stringify(...))` over the live feed socket — so the WebSocket is **bidirectional**:
+   the browser receives snapshots *and* sends control frames up the same connection.
+   - Close:  `{ "action": "incident", "type": "close_edge", "edge": "<id>" }`
+   - Reopen: `{ "action": "reopen" }`
+
+2. **Emitter — a control inbox.** The emitter's WebSocket server reads inbound frames; any whose
+   `action` is in `{"incident", "reopen"}` are pushed onto a thread-safe `ControlInbox` queue instead
+   of being ignored. Queuing matters because TraCI is single-threaded — the async socket must not call
+   TraCI directly while the sim is stepping.
+
+3. **Sim loop — drain once per tick.** Each simulation step, before stepping, `run_traci.py` drains the
+   inbox:
+   - `reopen` → `controller.reopen_all(t)`.
+   - `incident` → `incident_from_control(cmd, t)` builds an `Incident(type=close_edge, target=edge,
+     start=now, end=now+duration or None)`, then `controller.add(inc)`.
+   Then `controller.step(traci, t)` applies/reverts against the live connection. Draining at a fixed
+   point in the tick is what keeps TraCI access single-threaded and safe.
+
+4. **IncidentController — apply/revert with saved state.**
+   - **Close** = for each lane of the edge, **save the current max speed**, then `setMaxSpeed(lane, ~0)`
+     so vehicles can't proceed (the road is blocked). `add()` appends the incident at runtime; `step()`
+     picks it up on the next tick (applied-state is keyed by index, so live injection is safe).
+   - **Reopen** = `reopen_all(now)` sets each still-active incident's `end = now`, so the next `step()`
+     **reverts** it — restoring the saved max speeds. No sim restart; the running simulation keeps going
+     and the queued vehicles drain on their own, so traffic **recovers realistically** rather than being
+     teleported or reset.
+
+**Why it feels impressive (the design points to mention in the viva):**
+- **No restart, fully reversible** — closing saves the exact state it changes; reopening restores it.
+  The sim clock never stops, so you watch the queue build and then drain.
+- **One socket, two directions** — locally there's no separate control service; the feed socket carries
+  commands upstream, and a queue decouples the async I/O from the single-threaded TraCI stepping.
+- **Open-ended by design** — a live click closes the road until you reopen (no hidden timer), matching
+  the toggle UX; a timed closure is the same mechanism with an `end`.
+
+**Scope:** local `--emit` path only. The cloud feed is one-way fan-out (forward-only `--emit-target`),
+so live click-to-inject over AWS is a deferred build (Q3 / CHECKLIST "Planned improvements"); the cloud
+equivalent today is **Start road block**, which starts a fresh run with the edge closed from the start.
