@@ -31,6 +31,14 @@ def test_basic_aggregation():
     assert m["congestionIndex"] == 0.5      # 2/4
     assert m["simTime"] == 100.0
     assert m["simId"] == "s"
+    assert m["scenarioId"] == "s"           # defaults to simId when the snapshot has no scenarioId
+
+
+def test_scenario_id_carried_through():
+    snap = {"simId": "s", "scenarioId": "crash_arterial", "simTime": 1.0,
+            "vehicles": [{"id": "v0", "speed": 3.0}]}
+    m = compute_tick_metrics(snap)
+    assert m["scenarioId"] == "crash_arterial"
 
 
 def test_empty_network():

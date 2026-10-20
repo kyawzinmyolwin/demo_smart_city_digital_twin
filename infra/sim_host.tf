@@ -72,7 +72,8 @@ resource "aws_instance" "sim_host" {
   user_data_replace_on_change = true
 
   user_data = templatefile("${path.module}/sim_host_userdata.sh.tftpl", {
-    ws_url = aws_apigatewayv2_stage.prod.invoke_url
+    ws_url  = aws_apigatewayv2_stage.prod.invoke_url
+    git_ref = var.sim_host_git_ref
   })
 
   tags = { Name = "${local.name_prefix}-sim-host" }
