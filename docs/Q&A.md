@@ -385,3 +385,36 @@ thing" case the Comparative Analysis makes:
 So the sentence does rhetorical work: it shows that even the strongest existing cloud-SUMO system still
 lacks the planner-facing capabilities that are this project's contribution. The safe framing in the
 viva is always **"out of their scope," not "a gap in their work."**
+
+## Q7. In the compare view, a crash scenario sometimes shows *lower* congestion, labelled "better" (e.g. `congestion: baseline_am 0.4 → crash_arterial 0.3 (-6%, better)`). Why — did the crash improve traffic?
+
+**No. "better" is a mechanical directional label, not a causal claim.** The compare summary
+reads **B vs A** (here A = `baseline_am`, B = `crash_arterial`). For each metric it knows which
+direction is bad — for congestion *a rise is worse*, for avg speed *a drop is worse* — and it
+colours the change green/"better" or red/"worse" accordingly. Congestion fell (0.4 → 0.3), and
+lower congestion is good, so it prints **"better"** (green). It is only saying *run B sits on the
+good side of run A for this metric* — nothing about why.
+
+**Why the displayed numbers don't match the %.** The `%` is computed from the *unrounded* means
+(`(mB − mA)/|mA|`), but `0.4` and `0.3` are each rounded to one decimal for display. So the real
+means are ~0.37 → 0.35 (a true −6 %), not 0.40 → 0.30 (which would read −25 %). The percentage is
+the accurate figure; the decimals are cosmetic.
+
+**Why a crash can genuinely read lower-congestion (the important caveat).** The congestion index
+is a **network-wide average over vehicles currently on the network**. When an arterial is closed,
+SUMO holds vehicles at their entry edge (**insertion backlog**) rather than inserting them into a
+saturated network — the same effect quantified in the GEH validation (§4.2 / `docs/VALIDATION.md`,
+where the Durham St bottleneck inserted only 215 of 1353 demanded vehicles). Those un-inserted
+vehicles don't contribute to "congestion on the network", so the average can *fall* even though
+demand is being **suppressed, not served**. The network didn't get better — it got **starved**.
+
+**How to read it honestly (and what to say in the viva).** Never read congestion alone for a
+closure scenario — pair it with `vehicleCount` / `stoppedCount` (which is exactly why the **Impact
+report** reports these fields together, not congestion in isolation):
+- congestion down **and** vehicles-served up → genuinely smoother.
+- congestion down **but** vehicles-served/stopped also down → demand withheld (insertion backlog),
+  not an improvement — the "better" label is an artefact of the averaging, not a real gain.
+
+So the correct viva framing: *"the tool flags the directional change per metric; for an incident I
+interpret congestion together with throughput, because a closure can lower the network-average
+simply by keeping cars from entering."*
