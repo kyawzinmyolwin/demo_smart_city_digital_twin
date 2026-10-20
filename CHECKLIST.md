@@ -75,6 +75,24 @@ _Updated 2026-10-03._
       `terraform apply` repackages the Lambda) — and update the unit tests
       (`test_control_server.py`, `test_cloud_control.py`). See `docs/Q&A.md` Q2 for
       rationale. Low-risk, high demo value.
+- [ ] **Live-feed latency / smoothness on the hosted dashboard.** The perceived lag is NOT
+      CloudFront (it only serves the static page once) — the live path is EC2 emitter →
+      API Gateway WebSocket → `traffic-ingest` Lambda fan-out → browser. Today the sim host
+      runs `--real-time --speed 5 --emit-interval 10` (~5 msgs/s, ~50 KB each) and the map
+      renders markers with Leaflet's default SVG renderer. Levers, cheapest first:
+      (1) **Canvas renderer (biggest easy win, ~1 line):** create the map with
+      `L.map("map", { preferCanvas: true })` — canvas draws hundreds of markers far faster
+      than SVG; markers are already reused (`setLatLng`/`setStyle`), so this is the main
+      remaining render lever. (2) **Shrink + slow the feed:** round `lat`/`lng` to 5 dp
+      (~1 m) instead of 6, drop `accel` if unplotted (`scripts/emitter.py` `serialize_vehicles`);
+      lower `--speed 5 → 2–3` (fewer msgs/s, feels *more* real-time) rather than raising
+      `--emit-interval` (choppier). (3) **Client-side interpolation (the proper fix, more
+      work):** tween marker positions between messages with `requestAnimationFrame` so motion
+      is 60 fps-smooth regardless of the 2–5 Hz data cadence. (4) **Region reality (not
+      tunable):** API Gateway WS is `ap-southeast-2` and is not accelerated by CloudFront;
+      ~30–40 ms from NZ is inherent. Diagnose by symptom: choppy motion → (1); view running
+      behind real-time → (2); periodic freezes → Lambda cold-start/GC. (1)+(2) are safe local
+      changes (~1–2h); (3) is ~4–6h.
 
 ### Deferred by choice (not scheduled)
 - [ ] Incident rerouting / detours (~6–9h)
