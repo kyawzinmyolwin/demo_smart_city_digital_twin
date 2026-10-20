@@ -190,7 +190,6 @@ demo_smart_city_digital_twin/
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Diagrams + component reference |
 | [infra/README.md](infra/README.md) | AWS/Terraform cloud pipeline |
 | [running_guide.md](running_guide.md) | End-to-end run guide (local + cloud) |
-| [METRICS_REPLAY.md](METRICS_REPLAY.md) | Metrics / replay / InfluxDB deep dive |
 | [COMMANDS.md](COMMANDS.md) | Command cheat sheet (per terminal) |
 | [CHECKLIST.md](CHECKLIST.md) | Project status at a glance |
 | [smart_city_digital_twin/README.md](smart_city_digital_twin/README.md) | SUMO + Unity setup |
