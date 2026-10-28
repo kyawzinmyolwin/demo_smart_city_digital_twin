@@ -76,6 +76,27 @@ python3 scripts/metrics_writer.py --sample-every 10
 You need **all three** running for live data: emitter → writer → InfluxDB. Miss the writer and
 you get a live map but an empty database.
 
+### Populate the Compare view — run both scenarios with one command
+
+To get a baseline-vs-incident **Compare / Impact** view you need two runs in InfluxDB, each
+tagged by `scenario_id`. `scripts/run_scenarios.py` runs them **back-to-back** (they share the
+TraCI/emitter ports, so they can't run at once) and auto-starts the metrics writer per run — so
+you don't have to launch the emitter and writer by hand or remember the second run:
+
+```bash
+cd smart_city_digital_twin/2D_simulation
+python3 scripts/run_scenarios.py              # baseline_am → crash_arterial (the default pair)
+python3 scripts/run_scenarios.py --fast       # skip real-time pacing — fills InfluxDB quickly
+python3 scripts/run_scenarios.py --scenario baseline_am    # just one run
+python3 scripts/run_scenarios.py --no-writer  # if you start metrics_writer yourself
+```
+- Needs InfluxDB up (the `docker compose up -d` above). Uses the same presets as the dashboard's
+  Start buttons (`control_server.PRESETS`), so the two never drift.
+- Each preset self-terminates at 07:30 (`--end 27000`); at real-time `--speed 5` that's ~12 min
+  per run (~24 min for the pair) — use `--fast` for a quick data fill.
+- Then open the dashboard **Compare** panel and set the two scenario ids (`baseline_am` vs
+  `crash_arterial`), or click **Impact report**.
+
 ---
 
 ## C. Historical charts — read stored data into the dashboard

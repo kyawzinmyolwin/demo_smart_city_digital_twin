@@ -26,7 +26,9 @@ from typing import Any, Iterable
 # the unit test) importable without the dependency installed.
 
 
-def serialize_vehicles(traci: Any, net: Any, sim_id: str) -> dict[str, Any]:
+def serialize_vehicles(
+    traci: Any, net: Any, sim_id: str, scenario_id: str | None = None
+) -> dict[str, Any]:
     """Build one JSON snapshot of every vehicle currently on the network.
 
     Parameters
@@ -38,6 +40,10 @@ def serialize_vehicles(traci: Any, net: Any, sim_id: str) -> dict[str, Any]:
         in rather than imported so this function stays SUMO-free and testable.
     sim_id:
         Scenario identifier echoed back to clients.
+    scenario_id:
+        Optional decision-support scenario name (e.g. ``baseline_am`` vs
+        ``crash_arterial``) used to tag stored metrics for side-by-side comparison.
+        Defaults to ``sim_id`` when not given, so the snapshot always carries one.
 
     Returns
     -------
@@ -65,6 +71,7 @@ def serialize_vehicles(traci: Any, net: Any, sim_id: str) -> dict[str, Any]:
     return {
         "tick": int(time.time() * 1000),          # wall-clock ms, for the client
         "simId": sim_id,
+        "scenarioId": scenario_id if scenario_id is not None else sim_id,
         "simTime": round(traci.simulation.getTime(), 3),
         "vehicleCount": len(vehicles),
         "vehicles": vehicles,
@@ -115,20 +122,51 @@ class Broadcaster:
             self.unregister(ws)
 
 
-async def serve(broadcaster: Broadcaster, host: str, port: int):
+class ControlInbox:
+    """A queue of inbound control commands from dashboard clients (e.g. "close this
+    edge now"). The WebSocket handler appends parsed commands; the stepping loop
+    drains them each tick and applies them to the live IncidentController. Kept
+    tiny and dependency-free so it's trivially testable."""
+
+    def __init__(self) -> None:
+        self._pending: list[dict[str, Any]] = []
+
+    def add(self, cmd: dict[str, Any]) -> None:
+        self._pending.append(cmd)
+
+    def drain(self) -> list[dict[str, Any]]:
+        out = self._pending
+        self._pending = []
+        return out
+
+
+async def serve(broadcaster: Broadcaster, host: str, port: int, inbox: "ControlInbox | None" = None):
     """Start the WebSocket server and return the running server object.
 
-    Each connection: send the current snapshot right away, then just hold the
-    socket open (we only push; clients don't send anything the emitter reads).
+    Each connection: send the current snapshot right away, then read inbound
+    frames. Clients normally send nothing; when ``inbox`` is given, control frames are
+    queued for the stepping loop: ``{"action": "incident", ...}`` to close a road live
+    and ``{"action": "reopen"}`` to lift active closures (the live Reopen toggle). Any
+    other frame is ignored.
     """
     import websockets
+
+    _CONTROL_ACTIONS = {"incident", "reopen"}
 
     async def handler(ws: Any) -> None:
         broadcaster.register(ws)
         try:
             if broadcaster.latest is not None:
                 await ws.send(broadcaster.latest)
-            await ws.wait_closed()
+            async for raw in ws:               # ends when the client disconnects
+                if inbox is None:
+                    continue
+                try:
+                    msg = json.loads(raw)
+                except Exception:               # noqa: BLE001 - ignore malformed control frames
+                    continue
+                if isinstance(msg, dict) and msg.get("action") in _CONTROL_ACTIONS:
+                    inbox.add(msg)
         finally:
             broadcaster.unregister(ws)
 

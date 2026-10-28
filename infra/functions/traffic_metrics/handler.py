@@ -37,6 +37,7 @@ def _get_token():
 def _line_protocol(m):
     # measurement,tagset fieldset   (timestamp omitted → InfluxDB uses server time)
     sim_id = str(m.get("simId", "unknown")).replace(" ", "_")
+    scenario_id = str(m.get("scenarioId", m.get("simId", "unknown"))).replace(" ", "_")
     fields = [
         f"vehicleCount={int(m['vehicleCount'])}i",
         f"avgSpeed={float(m['avgSpeed'])}",
@@ -46,7 +47,7 @@ def _line_protocol(m):
     ]
     if m.get("simTime") is not None:
         fields.append(f"simTime={float(m['simTime'])}")
-    return f"traffic_metrics,simId={sim_id} {','.join(fields)}"
+    return f"traffic_metrics,simId={sim_id},scenario_id={scenario_id} {','.join(fields)}"
 
 
 def lambda_handler(event, context):
@@ -67,6 +68,11 @@ def lambda_handler(event, context):
     try:
         with urllib.request.urlopen(req, timeout=10) as resp:
             resp.read()
+        # Log the exact line written. CloudWatch tags every log line with the
+        # invocation RequestId, so this one line lets a CloudWatch record be
+        # matched 1:1 to the resulting InfluxDB point (same scenario_id + field
+        # values) without storing the RequestId in InfluxDB.
+        print(f"wrote point: {line}")
     except urllib.error.HTTPError as exc:
         # Surface the InfluxDB error body in the logs for debugging.
         print(f"InfluxDB write failed {exc.code}: {exc.read().decode('utf-8', 'replace')}")
