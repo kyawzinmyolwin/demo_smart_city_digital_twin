@@ -1,7 +1,7 @@
 # Running Guide — Christchurch Digital Twin
 
 How to run the system in each mode. Commands assume you start from the repo root
-(`demo_smart_city_digital_twin/`) unless a `cd` says otherwise.
+(`sumo-cloud-digital-twin/`) unless a `cd` says otherwise.
 
 ## Prerequisites
 

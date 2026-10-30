@@ -5,7 +5,7 @@ SUMO micro-simulation that you can *perturb* — close a road, stage a crash, ad
 event surge — and measure the impact against a real-data baseline, live in the
 browser and backed by a cloud time-series pipeline.
 
-[![CI](https://github.com/kyawzinmyolwin/demo_smart_city_digital_twin/actions/workflows/ci.yml/badge.svg)](https://github.com/kyawzinmyolwin/demo_smart_city_digital_twin/actions/workflows/ci.yml)
+[![CI](https://github.com/kyawzinmyolwin/sumo-cloud-digital-twin/actions/workflows/ci.yml/badge.svg)](https://github.com/kyawzinmyolwin/sumo-cloud-digital-twin/actions/workflows/ci.yml)
 
 > COMP 693 Industry Project · Lincoln University, NZ. The SUMO network and demand are
 > built from real Christchurch City Council + OpenStreetMap + Miovision data; the
@@ -162,7 +162,7 @@ checked with `node --check`; no SUMO, cloud, or network required. GitHub Actions
 ## Repository layout
 
 ```
-demo_smart_city_digital_twin/
+sumo-cloud-digital-twin/
 ├── README.md                  ← you are here
 ├── docker-compose.yml         ← one-command local stack
 ├── docker/                    ← sim (SUMO) + app Dockerfiles

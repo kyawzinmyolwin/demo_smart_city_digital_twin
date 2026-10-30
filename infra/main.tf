@@ -26,7 +26,7 @@ provider "aws" {
       Project     = var.project
       Environment = var.environment
       ManagedBy   = "terraform"
-      Repo        = "demo_smart_city_digital_twin"
+      Repo        = "sumo-cloud-digital-twin"
     }
   }
 }
@@ -43,7 +43,7 @@ provider "aws" {
       Project     = var.project
       Environment = var.environment
       ManagedBy   = "terraform"
-      Repo        = "demo_smart_city_digital_twin"
+      Repo        = "sumo-cloud-digital-twin"
     }
   }
 }

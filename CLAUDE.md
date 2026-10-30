@@ -1,4 +1,4 @@
-# CLAUDE.md — demo_smart_city_digital_twin
+# CLAUDE.md — sumo-cloud-digital-twin
 
 Project context for Claude Code. Read this before touching any file.
 
@@ -389,7 +389,7 @@ Total: ~$1–2/month
 
 A Christchurch CBD traffic simulation (SUMO-based) extended with a cloud data pipeline and a live browser dashboard. The simulation already exists and works. Everything cloud-related is new — nothing has been built yet.
 
-**Repo:** `kyawzinmyolwin/demo_smart_city_digital_twin`
+**Repo:** `kyawzinmyolwin/sumo-cloud-digital-twin`
 **Student:** Lincoln University, NZ — COMP 693 Industry Project
 **Budget:** 300 hours total (200h core build + 100h extension features)
 **Cloud platform:** AWS (primary choice)
@@ -508,7 +508,7 @@ Extend `run_traci.py` to emit vehicle state as JSON over WebSocket every simulat
 ## Project structure (current)
 
 ```
-demo_smart_city_digital_twin/
+sumo-cloud-digital-twin/
 ├── CLAUDE.md                          ← this file
 ├── Unity_fundamental/                 ← unrelated tutorial project, ignore
 └── smart_city_digital_twin/
