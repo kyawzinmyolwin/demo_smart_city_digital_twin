@@ -41,3 +41,7 @@ sumo.log
 *.tfstate
 *.tfstate.*
 terraform.tfvars
+
+# Local artefacts (downloaded installers, regenerable SUMO validation output)
+*.deb
+edgedata_am.out.xml
