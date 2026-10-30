@@ -260,7 +260,6 @@ cd smart_city_digital_twin && python3 -m http.server 8765
 - Christchurch OpenData — [Road intersections](https://opendata-christchurchcity.hub.arcgis.com/datasets/4912c568d9a742caa630873278554932_6/explore)  
 - Eclipse SUMO — https://sumo.dlr.de/docs/
 
-## 11. Branch Update
 ---
 
 *Smart City Digital Twin — COMP 693 Industry Project · Jix Reality · Lincoln University*
